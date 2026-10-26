@@ -1,0 +1,68 @@
+.markdown {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-1);
+  overflow-wrap: break-word;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  margin: 20px 0 8px;
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.markdown h2 {
+  font-size: 16px;
+}
+
+.markdown h3 {
+  font-size: 15px;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol {
+  margin: 8px 0;
+}
+
+.markdown code {
+  padding: 1px 5px;
+  font-size: 13px;
+  border-radius: 4px;
+  background: var(--color-fill-2);
+}
+
+.markdown pre {
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--color-fill-2);
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.markdown th,
+.markdown td {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-2);
+}
+
+.markdown th {
+  background: var(--color-fill-1);
+}
+
+/* Display math can be wider than the pane. */
+.markdown :global(.katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>wuOJ</title>
+  </head>
+  <body>
+    <script>
+      // Apply the dark theme before first paint so there is no flash of the wrong theme.
+      // Mirrors useApplyTheme (src/lib/theme.ts) and the "wuoj-preferences" store.
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('wuoj-preferences') || '{}');
+          var theme = saved.state && saved.state.theme;
+          if (!theme) theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          if (theme === 'dark') document.body.setAttribute('arco-theme', 'dark');
+        } catch (e) {}
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

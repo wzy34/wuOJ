@@ -1,0 +1,61 @@
+.layout {
+  min-height: 100vh;
+  background: var(--color-bg-1);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 56px;
+  padding: 0 24px;
+  background: var(--color-bg-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgb(var(--primary-6));
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.content {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+@media (max-width: 767px) {
+  .header {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .content {
+    padding: 12px;
+  }
+}

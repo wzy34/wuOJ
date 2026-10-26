@@ -1,0 +1,25 @@
+.page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 16px;
+  background: var(--color-fill-2);
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.brand {
+  margin-top: 0;
+  color: rgb(var(--primary-6));
+}
+
+.subtitle {
+  margin-bottom: 20px;
+}
+
+.alert {
+  margin-bottom: 16px;
+}

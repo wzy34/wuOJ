@@ -1,0 +1,28 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title {
+  margin: 0 !important;
+}
+
+.source {
+  border: 1px solid var(--color-border-2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.compileOutput {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 360px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  border-radius: 6px;
+  color: var(--color-text-1);
+  background: var(--color-fill-2);
+}

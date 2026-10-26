@@ -1,0 +1,27 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0 !important;
+}
+
+.problemFilter {
+  width: 240px;
+}
+
+.verdictFilter {
+  width: 210px;
+}
+
+@media (max-width: 767px) {
+  .problemFilter,
+  .verdictFilter {
+    width: 100%;
+  }
+}

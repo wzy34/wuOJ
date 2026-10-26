@@ -1,0 +1,97 @@
+/* The workspace fills the viewport below the 56 px top bar and the content padding. */
+.split {
+  height: calc(100vh - 56px - 40px);
+  min-height: 480px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 8px;
+  background: var(--color-bg-2);
+  overflow: hidden;
+}
+
+.pane {
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tabs :global(.arco-tabs-content) {
+  flex: 1;
+  min-height: 0;
+  padding-top: 0;
+}
+
+.tabs :global(.arco-tabs-content-inner),
+.tabs :global(.arco-tabs-pane) {
+  height: 100%;
+}
+
+.scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding: 4px 20px 24px;
+}
+
+.title {
+  margin: 12px 0 8px !important;
+}
+
+.meta {
+  margin-bottom: 4px;
+}
+
+.editorPane {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border-2);
+}
+
+.language {
+  width: 100px;
+}
+
+.fontSize {
+  width: 90px;
+}
+
+.editor {
+  flex: 1;
+  min-height: 200px;
+}
+
+.stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stackedStatement,
+.stackedEditor {
+  border: 1px solid var(--color-border-2);
+  border-radius: 8px;
+  background: var(--color-bg-2);
+  overflow: hidden;
+}
+
+.stackedStatement {
+  max-height: 60vh;
+}
+
+.stackedEditor {
+  height: 75vh;
+}

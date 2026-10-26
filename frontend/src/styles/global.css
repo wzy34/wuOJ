@@ -1,0 +1,39 @@
+/* Arco's CSS variables switch with the `arco-theme` attribute on <body>. */
+body {
+  margin: 0;
+  background-color: var(--color-bg-1);
+  color: var(--color-text-1);
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+code,
+pre,
+kbd,
+.mono {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Links follow Arco's primary colour, which has light and dark variants. */
+a {
+  color: rgb(var(--primary-6));
+  text-decoration: none;
+}
+
+a:hover {
+  color: rgb(var(--primary-5));
+  text-decoration: underline;
+}

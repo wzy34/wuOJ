@@ -1,0 +1,8 @@
+extends:
+  - recommended
+rules:
+  # Internal API between the wuOJ web app and backend; no public license.
+  info-license: off
+  # SubmissionStatusEvent types the `data` of SSE events, which OpenAPI 3.1
+  # cannot reference from the text/event-stream response.
+  no-unused-components: off
