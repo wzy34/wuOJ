@@ -1,0 +1,7 @@
+displayId: "1004"
+slug: bipartite-graph-check
+title: Bipartite Graph Check
+difficulty: MEDIUM
+timeLimitMs: 1000
+memoryLimitMb: 256
+visible: true

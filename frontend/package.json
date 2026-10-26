@@ -21,7 +21,8 @@
     "lint:api": "pnpm dlx --package=@redocly/cli@2.71.0 redocly lint --config ../api/redocly.yaml ../api/openapi.yaml",
     "gen:api": "orval --config orval.config.ts",
     "check:api": "node scripts/check-generated.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:backend": "playwright test --config playwright.backend.config.ts"
   },
   "dependencies": {
     "@arco-design/web-react": "^2.66.18",

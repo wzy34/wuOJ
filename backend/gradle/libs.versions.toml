@@ -1,0 +1,15 @@
+# Versions not managed by the Spring Boot BOM. Everything else comes from Spring Boot 4.1.2.
+[versions]
+spring-boot = "4.1.2"
+spring-dependency-management = "1.1.7"
+docker-java = "3.7.1"
+openapi-request-validator = "3.0.0"
+
+[libraries]
+docker-java-core = { module = "com.github.docker-java:docker-java-core", version.ref = "docker-java" }
+docker-java-transport = { module = "com.github.docker-java:docker-java-transport-httpclient5", version.ref = "docker-java" }
+openapi-validator-mockmvc = { module = "com.atlassian.oai:openapi-request-validator-mockmvc", version.ref = "openapi-request-validator" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }

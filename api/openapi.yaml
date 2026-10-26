@@ -57,6 +57,19 @@ paths:
                 $ref: '#/components/schemas/ApiProblem'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          description: |
+            Too many failed sign-in attempts for this username; retry after the given number of seconds.
+            `detail` is a message that can be shown to the user as is.
+          headers:
+            Retry-After:
+              description: Seconds to wait before signing in again.
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
 
   /api/auth/logout:
     post:

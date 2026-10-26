@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { server } from '@/mocks/node';
 import { renderRoute } from '@/test/render';
@@ -29,6 +30,26 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Invalid username or password')).toBeInTheDocument();
     expect(screen.getByLabelText('Username')).toHaveValue('student');
     await waitFor(() => expect(screen.getByLabelText('Password')).toHaveValue(''));
+  });
+
+  it('shows the server message when sign-in is throttled', async () => {
+    const detail = 'Too many failed sign-in attempts. Try again in 120 seconds.';
+    server.use(
+      http.post('/api/auth/login', () =>
+        HttpResponse.json(
+          { status: 429, title: 'Too Many Requests', detail },
+          {
+            status: 429,
+            headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '120' },
+          },
+        ),
+      ),
+    );
+    renderRoute('/login');
+    await fillAndSubmit('alice', 'alice');
+
+    expect(await screen.findByText(detail)).toBeInTheDocument();
+    expect(screen.getByLabelText('Username')).toHaveValue('alice');
   });
 
   it('asks for missing fields without sending a request', async () => {

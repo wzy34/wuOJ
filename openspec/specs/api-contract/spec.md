@@ -96,3 +96,21 @@ The web app SHALL support a mock mode, enabled by configuration at development t
 #### Scenario: Production build
 - **WHEN** the app is built for production
 - **THEN** the build contains no mock handlers and all requests go to the real `/api`
+
+### Requirement: Sign-in throttling in the contract
+The contract SHALL document that `POST /api/auth/login` may answer `429` with a `Retry-After` header (in seconds) and a problem-details body whose `detail` is a message a person can read. The web app SHALL show that message on the login page, and the generated client SHALL include the response.
+
+#### Scenario: Throttled sign in
+- **WHEN** the server answers a sign-in with 429, `Retry-After: 120` and detail "Too many failed sign-in attempts. Try again in 120 seconds."
+- **THEN** the login page shows that message and keeps the username
+
+### Requirement: Server conformance
+The backend SHALL be verified against `api/openapi.yaml`. Its automated API tests SHALL check every request they send and every response they receive against the contract, and SHALL fail on any difference. This covers status codes, headers declared in the contract, and body schemas, including error responses.
+
+#### Scenario: Undocumented field
+- **WHEN** a backend change adds a response field that is not in the contract
+- **THEN** the backend's API tests fail until the contract is updated or the field is removed
+
+#### Scenario: Error body shape
+- **WHEN** the API tests send an invalid submission
+- **THEN** the 400 response is checked against `ApiProblem`, including its `errors` items

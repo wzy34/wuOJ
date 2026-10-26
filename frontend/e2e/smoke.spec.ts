@@ -22,12 +22,14 @@ test('a student signs in, submits code and follows the verdict to the details', 
   await page.getByRole('button', { name: 'Submit' }).click();
 
   const result = page.getByRole('region', { name: 'Submission result' });
-  await expect(result).toContainText('Submission #7');
+  await expect(result).toContainText(/Submission #\d+/);
+  const id = /Submission #(\d+)/.exec((await result.textContent()) ?? '')?.[1];
+  expect(id).toBeDefined();
   await expect(result.getByText('Wrong Answer')).toBeVisible({ timeout: 20_000 });
 
   await result.getByRole('link', { name: 'View details' }).click();
-  await expect(page).toHaveURL(/\/submissions\/7$/);
-  await expect(page.getByRole('heading', { name: 'Submission #7' })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/submissions/${id}$`));
+  await expect(page.getByRole('heading', { name: `Submission #${id}` })).toBeVisible();
 
   const testResults = page.locator('.arco-card', { hasText: 'Test results' });
   const rows = testResults.locator('tbody tr');

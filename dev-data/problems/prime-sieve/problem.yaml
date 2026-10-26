@@ -1,0 +1,7 @@
+displayId: "1003"
+slug: prime-sieve
+title: Prime Sieve
+difficulty: EASY
+timeLimitMs: 1000
+memoryLimitMb: 256
+visible: true

@@ -1,0 +1,7 @@
+displayId: "1002"
+slug: maximum-subarray-sum
+title: Maximum Subarray Sum
+difficulty: MEDIUM
+timeLimitMs: 1000
+memoryLimitMb: 256
+visible: true

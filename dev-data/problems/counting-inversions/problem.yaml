@@ -1,0 +1,7 @@
+displayId: "1006"
+slug: counting-inversions
+title: Counting Inversions
+difficulty: HARD
+timeLimitMs: 1000
+memoryLimitMb: 128
+visible: true

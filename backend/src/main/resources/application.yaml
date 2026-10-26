@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: wuoj
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  jackson:
+    default-property-inclusion: non_null
+  session:
+    timeout: 8h
+  rabbitmq:
+    # Judge jobs count as enqueued only once the broker confirms them; unroutable messages are returned.
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+  docker:
+    compose:
+      # Leave the dependencies running between restarts of the application.
+      lifecycle-management: start-only
+  web:
+    error:
+      # Errors are rendered as problem details by ApiExceptionHandler, never as Boot's error page.
+      whitelabel:
+        enabled: false
+
+server:
+  port: 8080
+  shutdown: graceful
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-components: always
+
+oj:
+  roles: [api, worker]
+  testdata:
+    root: ./var/testdata
+  judge:
+    image: wuoj/judge-cpp:dev
+    work-dir: ./var/judge
+    slots: [""]
+    simulated: false
+    simulated-step: 350ms
+  rate-limit:
+    submissions: 3
+    window: 10s
+    unfinished: 2
+    unfinished-retry-after: 5s
+  login-throttle:
+    max-failures: 5
+    window: 5m
+
+logging:
+  level:
+    # Image pull progress is logged line by line at INFO.
+    org.springframework.boot.docker.compose.core.DockerCli: warn
+    # Lettuce (Redis) warns on macOS about a native DNS resolver it falls back from; harmless.
+    io.netty.resolver.dns.DnsServerAddressStreamProviders: error

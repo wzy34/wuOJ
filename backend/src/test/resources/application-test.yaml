@@ -1,0 +1,12 @@
+oj:
+  testdata:
+    root: ./build/test-var/testdata
+  judge:
+    work-dir: ./build/test-var/judge
+    simulated: true
+    simulated-step: 5ms
+
+logging:
+  level:
+    root: warn
+    dev.wuoj: info

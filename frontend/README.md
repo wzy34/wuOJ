@@ -39,6 +39,7 @@ installed version.
 | `pnpm build` / `pnpm preview`       | Production build into `dist/` / serve it locally                                |
 | `pnpm test`                         | Unit and component tests (Vitest + Testing Library, API mocked with MSW)        |
 | `pnpm test:e2e`                     | End-to-end smoke test in Chromium; starts its own mock-mode server on port 5180 |
+| `pnpm test:e2e:backend`             | The same test against a running backend (see `playwright.backend.config.ts`)    |
 | `pnpm lint` / `pnpm typecheck`      | ESLint / TypeScript checks                                                      |
 | `pnpm format` / `pnpm format:check` | Prettier                                                                        |
 | `pnpm lint:api`                     | Validate `../api/openapi.yaml`                                                  |
