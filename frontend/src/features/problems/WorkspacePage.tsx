@@ -13,7 +13,7 @@ import {
 import { IconCheckCircleFill } from '@arco-design/web-react/icon';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import type { Problem } from '@/api/generated/model';
 import { useGetProblem } from '@/api/generated/problems/problems';
 import {
@@ -24,6 +24,7 @@ import { getApiProblem, getHttpStatus, getRetryAfterSeconds } from '@/api/http';
 import { LazyCodeEditor } from '@/components/LazyCodeEditor';
 import { MarkdownView } from '@/components/MarkdownView';
 import { NotFoundState, PageError, PageLoading } from '@/components/PageState';
+import { loginPath } from '@/features/auth/safeRedirect';
 import { useCurrentUser } from '@/features/auth/useCurrentUser';
 import { formatTimeLimit } from '@/lib/format';
 import { useMediaQuery } from '@/lib/useMediaQuery';
@@ -33,7 +34,7 @@ import { DIFFICULTY_DISPLAY } from './difficulty';
 import { MySubmissions } from './MySubmissions';
 import { ResultPanel } from './ResultPanel';
 import { Samples } from './Samples';
-import { draftKey, useDraft } from './useDraft';
+import { draftKey, useDraft, type DraftOwner } from './useDraft';
 import styles from './WorkspacePage.module.css';
 
 export const MAX_SOURCE_LENGTH = 65_536;
@@ -61,9 +62,21 @@ function Statement({ problem }: { problem: Problem }) {
   );
 }
 
-function EditorPane({ problem, userId }: { problem: Problem; userId: number }) {
+/** Visitors write code too; submitting needs an account, so the button leads to sign-in first. */
+function SignInToSubmit() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  return (
+    <Button type="primary" onClick={() => void navigate(loginPath(pathname))}>
+      Sign in to submit
+    </Button>
+  );
+}
+
+function EditorPane({ problem, owner }: { problem: Problem; owner: DraftOwner }) {
   const queryClient = useQueryClient();
-  const { code, setCode, reset } = useDraft(userId, problem.id);
+  const signedIn = owner !== 'guest';
+  const { code, setCode, reset } = useDraft(owner, problem.id);
   const fontSize = usePreferences((state) => state.editorFontSize);
   const setFontSize = usePreferences((state) => state.setEditorFontSize);
   const [submissionId, setSubmissionId] = useState<number>();
@@ -136,27 +149,35 @@ function EditorPane({ problem, userId }: { problem: Problem; userId: number }) {
             <Button>Reset to template</Button>
           </Popconfirm>
         </Space>
-        <Tooltip content="Ctrl+Enter (⌘+Enter on macOS)">
-          <Button
-            type="primary"
-            onClick={() => submit()}
-            disabled={blank}
-            loading={create.isPending}
-          >
-            Submit
-          </Button>
-        </Tooltip>
+        {signedIn ? (
+          <Tooltip content="Ctrl+Enter (⌘+Enter on macOS)">
+            <Button
+              type="primary"
+              onClick={() => submit()}
+              disabled={blank}
+              loading={create.isPending}
+            >
+              Submit
+            </Button>
+          </Tooltip>
+        ) : (
+          <SignInToSubmit />
+        )}
       </div>
       {error && <Alert type="error" content={error} closable onClose={() => setError(undefined)} />}
       <div className={styles.editor}>
-        <LazyCodeEditor value={code} onChange={setCode} onSubmitShortcut={submit} />
+        <LazyCodeEditor
+          value={code}
+          onChange={setCode}
+          onSubmitShortcut={signedIn ? submit : undefined}
+        />
       </div>
-      <ResultPanel submissionId={submissionId} />
+      {signedIn && <ResultPanel submissionId={submissionId} />}
     </div>
   );
 }
 
-function StatementPane({ problem }: { problem: Problem }) {
+function StatementPane({ problem, signedIn }: { problem: Problem; signedIn: boolean }) {
   return (
     <Tabs defaultActiveTab="description" className={styles.tabs} lazyload>
       <Tabs.TabPane key="description" title="Description">
@@ -164,11 +185,13 @@ function StatementPane({ problem }: { problem: Problem }) {
           <Statement problem={problem} />
         </div>
       </Tabs.TabPane>
-      <Tabs.TabPane key="submissions" title="My submissions">
-        <div className={styles.scroll}>
-          <MySubmissions slug={problem.slug} />
-        </div>
-      </Tabs.TabPane>
+      {signedIn && (
+        <Tabs.TabPane key="submissions" title="My submissions">
+          <div className={styles.scroll}>
+            <MySubmissions slug={problem.slug} />
+          </div>
+        </Tabs.TabPane>
+      )}
     </Tabs>
   );
 }
@@ -189,13 +212,10 @@ export function WorkspacePage() {
     );
   }
 
-  const statement = <StatementPane problem={problem.data} />;
+  const owner: DraftOwner = user?.id ?? 'guest';
+  const statement = <StatementPane problem={problem.data} signedIn={user !== undefined} />;
   const editor = (
-    <EditorPane
-      key={draftKey(user!.id, problem.data.id)}
-      problem={problem.data}
-      userId={user!.id}
-    />
+    <EditorPane key={draftKey(owner, problem.data.id)} problem={problem.data} owner={owner} />
   );
 
   if (narrow) {

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the HTTP contract between the web app and the judge backend for the student core, so both sides can be built independently, and a mock mode that serves that contract in the browser while no backend exists.
+Defines the HTTP contract between the web app and the judge backend, so both sides can be built independently, and a mock mode that serves that contract in the browser without a backend.
 
 ## Requirements
 
@@ -20,13 +20,23 @@ The repository SHALL contain one OpenAPI 3.1 document at `api/openapi.yaml` that
 ### Requirement: Student-core endpoints
 The contract SHALL define, under the `/api` prefix:
 - `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` for session handling;
+- `POST /auth/register` for self-registration and `GET /auth/options` for whether registration is open;
+- `POST /account/password` for changing one's own password;
 - `GET /problems` (paged, with title search and difficulty filter) and `GET /problems/{slug}`;
-- `POST /submissions`, `GET /submissions` (paged, filterable by scope `mine`/`all`, problem and verdict) and `GET /submissions/{id}`;
-- `GET /submissions/{id}/events` as a `text/event-stream` of submission status events.
+- `POST /submissions`, `GET /submissions` (paged, filterable by scope `mine`/`all`, problem, verdict and user) and `GET /submissions/{id}`;
+- `GET /submissions/{id}/events` as a `text/event-stream` of submission status events;
+- `GET /users/{username}` for public profiles;
+- `GET /admin/users` (paged, with username search and role and enabled filters), `PATCH /admin/users/{id}`, `POST /admin/users/{id}/password-reset` and `GET /admin/audit` (paged) for administration.
+
+`UserRole` SHALL have the values `USER` and `ADMIN`. `CurrentUser` SHALL include `mustChangePassword`.
 
 #### Scenario: Endpoint inventory
 - **WHEN** the contract is inspected
 - **THEN** each endpoint listed above is present with its parameters, success response and error responses documented
+
+#### Scenario: Role values
+- **WHEN** the generated client's `UserRole` type is inspected
+- **THEN** it allows exactly `USER` and `ADMIN`
 
 ### Requirement: Paging shape
 Every paged list endpoint SHALL accept `page` (1-based, default 1) and `size` (default 20, maximum 100) query parameters and SHALL return an object with `items`, `page`, `size`, `totalItems` and `totalPages`.
@@ -47,15 +57,21 @@ Every error response SHALL use the RFC 9457 problem details format (`application
 - **THEN** the response is 400 with a problem-details body whose field errors include `sourceCode`
 
 ### Requirement: Session and CSRF conventions
-Authentication SHALL use an HTTP-only session cookie set by `POST /auth/login`. Every state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) SHALL carry an `X-XSRF-TOKEN` header equal to the value of the `XSRF-TOKEN` cookie. Requests to protected endpoints without a valid session SHALL receive 401.
+Authentication SHALL use an HTTP-only session cookie set by `POST /auth/login` or `POST /auth/register`. Every state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) SHALL carry an `X-XSRF-TOKEN` header equal to the value of the `XSRF-TOKEN` cookie.
+
+The contract SHALL mark which endpoints accept requests without a session. It SHALL also mark which of them answer differently with one, such as the problem status and access to source code. Requests to protected endpoints without a valid session SHALL receive 401. Requests to admin endpoints from users who are not admins SHALL receive 403.
 
 #### Scenario: Missing CSRF header
 - **WHEN** a signed-in client sends `POST /api/submissions` without the `X-XSRF-TOKEN` header
 - **THEN** the request is rejected with 403
 
 #### Scenario: Expired session
-- **WHEN** a client calls `GET /api/submissions` with an expired session
+- **WHEN** a client calls `GET /api/submissions?scope=mine` with an expired session
 - **THEN** the response is 401
+
+#### Scenario: Optional session documented
+- **WHEN** the contract entry for `GET /api/problems` is inspected
+- **THEN** it allows both no authentication and the session cookie
 
 ### Requirement: Submission status model
 A submission SHALL have a `status` of `PENDING`, `COMPILING`, `RUNNING` or `FINISHED`. When `FINISHED` it SHALL have exactly one `verdict` from `AC` (Accepted), `WA` (Wrong Answer), `TLE` (Time Limit Exceeded), `MLE` (Memory Limit Exceeded), `RE` (Runtime Error), `CE` (Compilation Error), `OLE` (Output Limit Exceeded) or `SE` (System Error). Judging stops at the first failing test, so per-test results SHALL cover tests up to and including the first non-accepted one.
@@ -76,22 +92,37 @@ A submission SHALL have a `status` of `PENDING`, `COMPILING`, `RUNNING` or `FINI
 - **THEN** connected clients receive a `status` event with status `RUNNING`, current test 5 and total 12
 
 ### Requirement: Hidden data protection
-Responses SHALL never include the input or expected output of non-sample tests. Submission source code and compiler output SHALL be returned only to the submission's owner; for other users these fields SHALL be absent.
+Responses SHALL never include the input or expected output of non-sample tests. Submission source code and compiler output SHALL be returned only to the submission's owner and to admins. For everyone else, including visitors, these fields SHALL be absent.
 
 #### Scenario: Viewing another user's submission
-- **WHEN** a student requests `GET /api/submissions/{id}` for a submission they do not own
+- **WHEN** a user requests `GET /api/submissions/{id}` for a submission they do not own
 - **THEN** the response includes status, verdict, timing and per-test verdicts but no source code and no compiler output
 
+#### Scenario: Admin review
+- **WHEN** an admin requests the same submission
+- **THEN** the response includes the source code, and the compiler output if there was any
+
 ### Requirement: Mock mode
-The web app SHALL support a mock mode, enabled by configuration at development time, in which every contract endpoint—including the event stream—is answered inside the browser with demo data and no backend is contacted. Mock mode SHALL provide a demo student account, at least five problems of mixed difficulty with statements containing math and samples, and a simulated judge that walks submissions through `PENDING`, `COMPILING` and `RUNNING` to a final verdict. A developer SHALL be able to trigger each verdict on purpose. Mock mode SHALL never be active in a production build.
+The web app SHALL support a mock mode, enabled by configuration at development time, in which every contract endpoint—including the event stream—is answered inside the browser with demo data and no backend is contacted. Mock mode SHALL provide:
+- browsing as a visitor;
+- demo user accounts and one demo admin account;
+- registration of new accounts for the length of the page session;
+- at least five problems of mixed difficulty with statements containing math and samples;
+- a simulated judge that walks submissions through `PENDING`, `COMPILING` and `RUNNING` to a final verdict.
+
+A developer SHALL be able to trigger each verdict on purpose. Mock mode SHALL never be active in a production build.
 
 #### Scenario: Full flow without a backend
-- **WHEN** the app runs in mock mode and the demo student signs in, opens a problem and submits code
+- **WHEN** the app runs in mock mode and the demo user signs in, opens a problem and submits code
 - **THEN** the submission progresses live through each status to a final verdict
 
 #### Scenario: Forcing a verdict
 - **WHEN** a developer submits code containing the mock verdict marker for `TLE` in mock mode
 - **THEN** the simulated judge finishes the submission with verdict `TLE`
+
+#### Scenario: Admin pages in mock mode
+- **WHEN** the demo admin signs in in mock mode and opens the admin users page
+- **THEN** the demo accounts are listed and can be disabled, re-enabled and have their passwords reset
 
 #### Scenario: Production build
 - **WHEN** the app is built for production

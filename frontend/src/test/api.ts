@@ -14,11 +14,15 @@ export async function apiGet(path: string): Promise<Response> {
 export async function apiPost(
   path: string,
   body: unknown,
-  { csrf = true }: { csrf?: boolean } = {},
+  { csrf = true, method = 'POST' }: { csrf?: boolean; method?: string } = {},
 ): Promise<Response> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (csrf) headers['X-XSRF-TOKEN'] = csrfToken();
-  return fetch(apiUrl(path), { method: 'POST', headers, body: JSON.stringify(body) });
+  return fetch(apiUrl(path), { method, headers, body: JSON.stringify(body) });
+}
+
+export async function apiPatch(path: string, body: unknown): Promise<Response> {
+  return apiPost(path, body, { method: 'PATCH' });
 }
 
 /** Fetches the CSRF cookie and signs in, like the app does on startup. */

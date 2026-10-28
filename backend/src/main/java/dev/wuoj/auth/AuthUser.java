@@ -6,7 +6,7 @@ import java.util.Collection;
 import java.util.List;
 
 import dev.wuoj.common.domain.UserRole;
-import dev.wuoj.common.domain.Viewer;
+import dev.wuoj.user.UserAccount;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.CredentialsContainer;
 import org.springframework.security.core.GrantedAuthority;
@@ -15,25 +15,40 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 /**
  * The signed-in user, stored in the session (in Redis). Keep it small and stable: changing its shape signs everyone
- * out, since stored sessions can no longer be read.
+ * out, since stored sessions can no longer be read. The role is re-read from the account on every request (see
+ * {@link AccountFilter}); the epoch ties the session to the account state it was created in.
  */
 public final class AuthUser implements UserDetails, CredentialsContainer, Serializable {
 
     @Serial
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
 
     private final long id;
     private final String username;
     private final UserRole role;
     private final boolean enabled;
+    private final int epoch;
+    private final boolean mustChangePassword;
     private @Nullable String password;
 
-    public AuthUser(long id, String username, @Nullable String password, UserRole role, boolean enabled) {
-        this.id = id;
-        this.username = username;
+    private AuthUser(UserAccount account, @Nullable String password) {
+        this.id = account.id();
+        this.username = account.username();
         this.password = password;
-        this.role = role;
-        this.enabled = enabled;
+        this.role = account.role();
+        this.enabled = account.enabled();
+        this.epoch = account.sessionEpoch();
+        this.mustChangePassword = account.mustChangePassword();
+    }
+
+    /** The principal for an account as it is stored now, without its password. */
+    public static AuthUser of(UserAccount account) {
+        return new AuthUser(account, null);
+    }
+
+    /** For checking a sign-in: the principal with the stored password hash. */
+    static AuthUser withPassword(UserAccount account) {
+        return new AuthUser(account, account.passwordHash());
     }
 
     public long id() {
@@ -44,8 +59,12 @@ public final class AuthUser implements UserDetails, CredentialsContainer, Serial
         return role;
     }
 
-    public Viewer viewer() {
-        return new Viewer(id, role);
+    public int epoch() {
+        return epoch;
+    }
+
+    public boolean mustChangePassword() {
+        return mustChangePassword;
     }
 
     @Override

@@ -190,6 +190,31 @@ describe('submissions mock', () => {
     expect((await apiGet('/api/submissions/999999')).status).toBe(404);
   });
 
+  it('lets visitors list everyone and see details without source code', async () => {
+    expect((await apiGet('/api/submissions')).status).toBe(401);
+    const all: SubmissionPage = await (await apiGet('/api/submissions?scope=all')).json();
+    expect(all.totalItems).toBe(6);
+    const detail: SubmissionDetail = await (await apiGet('/api/submissions/4')).json();
+    expect(detail.verdict).toBe('CE');
+    expect(detail).not.toHaveProperty('sourceCode');
+    await apiGet('/api/auth/me');
+    expect((await apiPost('/api/submissions', { problemId: 1 })).status).toBe(401);
+  });
+
+  it('filters by user, ignoring case', async () => {
+    const page: SubmissionPage = await (
+      await apiGet('/api/submissions?scope=all&user=Alice')
+    ).json();
+    expect(page.items.map((s) => s.user.username)).toEqual(['alice', 'alice']);
+  });
+
+  it('shows source code to admins', async () => {
+    await signIn('admin');
+    const detail: SubmissionDetail = await (await apiGet('/api/submissions/4')).json();
+    expect(detail.sourceCode).toBeDefined();
+    expect(detail.compileOutput).toBeDefined();
+  });
+
   it('persists new submissions', async () => {
     await signIn();
     const created = await submit(PROGRAM);

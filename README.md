@@ -1,7 +1,7 @@
 # wuOJ
 
-An online judge for classrooms and clubs: students sign in, read problems, write C++17 in the browser, submit, and
-watch their verdict arrive live.
+A public online judge: anyone can read problems and write C++17 in the browser; registered users submit and watch their
+verdict arrive live, and admins manage accounts.
 
 | Directory               | What it is                                                                 |
 | ----------------------- | -------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@ To try the web app alone, see [`frontend/README.md`](frontend/README.md). To run
 cd backend
 ./gradlew buildJudgeImage && ./gradlew bootRun    # needs Docker
 ./gradlew importDevData                           # in another terminal
-cd ../frontend && pnpm install && pnpm dev        # http://localhost:5173, sign in as student / student
+cd ../frontend && pnpm install && pnpm dev        # http://localhost:5173: browse, register, or sign in as student / student
 ```
 
 Details are in [`backend/README.md`](backend/README.md).

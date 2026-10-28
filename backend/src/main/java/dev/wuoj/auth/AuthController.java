@@ -3,7 +3,10 @@ package dev.wuoj.auth;
 import dev.wuoj.common.config.ConditionalOnRole;
 import dev.wuoj.common.config.Role;
 import dev.wuoj.common.domain.UserRole;
+import dev.wuoj.common.web.ClientAddress;
 import dev.wuoj.common.web.ProblemResponses;
+import dev.wuoj.user.UserAccount;
+import dev.wuoj.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -16,11 +19,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.context.SecurityContextHolderStrategy;
-import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,48 +36,68 @@ public class AuthController {
 
     public record LoginRequest(@NotEmpty @Size(max = 64) String username, @NotEmpty @Size(max = 128) String password) {}
 
-    public record CurrentUser(long id, String username, UserRole role) {
+    /** The username and password rules are checked by {@link RegistrationService}, as field errors. */
+    public record RegisterRequest(@NotEmpty @Size(max = 64) String username, @NotEmpty String password) {}
+
+    public record AuthOptions(boolean registrationEnabled) {}
+
+    public record CurrentUser(long id, String username, UserRole role, boolean mustChangePassword) {
 
         static CurrentUser of(AuthUser user) {
-            return new CurrentUser(user.id(), user.getUsername(), user.role());
+            return new CurrentUser(user.id(), user.getUsername(), user.role(), user.mustChangePassword());
         }
     }
 
     private final AuthenticationManager authenticationManager;
-    private final SessionAuthenticationStrategy sessionStrategy;
-    private final SecurityContextRepository securityContexts;
+    private final SessionStarter sessions;
     private final LoginThrottle throttle;
-    private final SecurityContextHolderStrategy contextHolder = SecurityContextHolder.getContextHolderStrategy();
+    private final RegistrationService registration;
+    private final UserRepository users;
 
-    public AuthController(AuthenticationManager authenticationManager, SessionAuthenticationStrategy sessionStrategy,
-            SecurityContextRepository securityContexts, LoginThrottle throttle) {
+    public AuthController(AuthenticationManager authenticationManager, SessionStarter sessions, LoginThrottle throttle,
+            RegistrationService registration, UserRepository users) {
         this.authenticationManager = authenticationManager;
-        this.sessionStrategy = sessionStrategy;
-        this.securityContexts = securityContexts;
+        this.sessions = sessions;
         this.throttle = throttle;
+        this.registration = registration;
+        this.users = users;
     }
 
     @PostMapping("/login")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest body, HttpServletRequest request,
             HttpServletResponse response) {
-        throttle.check(body.username());
+        String address = ClientAddress.of(request);
+        throttle.check(body.username(), address);
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(body.username(), body.password()));
         } catch (AuthenticationException e) {
-            throttle.recordFailure(body.username());
+            throttle.recordFailure(body.username(), address);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ProblemResponses.problem(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS));
         }
 
-        sessionStrategy.onAuthentication(authentication, request, response);
-        SecurityContext context = contextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        contextHolder.setContext(context);
-        securityContexts.saveContext(context, request, response);
-        renderCsrfToken(request);
-        return ResponseEntity.ok(CurrentUser.of((AuthUser) authentication.getPrincipal()));
+        sessions.signIn(authentication, request, response);
+        AuthUser user = (AuthUser) authentication.getPrincipal();
+        users.recordSignIn(user.id());
+        return ResponseEntity.ok(CurrentUser.of(user));
+    }
+
+    /** Creates a user account and signs in as it, like a sign-in. */
+    @PostMapping("/register")
+    ResponseEntity<CurrentUser> register(@Valid @RequestBody RegisterRequest body, HttpServletRequest request,
+            HttpServletResponse response) {
+        UserAccount account = registration.register(body.username(), body.password(), ClientAddress.of(request));
+        AuthUser user = AuthUser.of(account);
+        sessions.signIn(user, request, response);
+        users.recordSignIn(user.id());
+        return ResponseEntity.status(HttpStatus.CREATED).body(CurrentUser.of(user));
+    }
+
+    @GetMapping("/options")
+    AuthOptions options() {
+        return new AuthOptions(registration.isOpen());
     }
 
     /** Also issues the {@code XSRF-TOKEN} cookie, signed in or not, so the app can send state-changing requests. */
@@ -91,10 +109,5 @@ public class AuthController {
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ProblemResponses.problem(HttpStatus.UNAUTHORIZED, "Not signed in."));
-    }
-
-    /** Loading the token replaced at sign-in writes it to the response as a fresh cookie. */
-    private static void renderCsrfToken(HttpServletRequest request) {
-        if (request.getAttribute(CsrfToken.class.getName()) instanceof CsrfToken token) token.getToken();
     }
 }

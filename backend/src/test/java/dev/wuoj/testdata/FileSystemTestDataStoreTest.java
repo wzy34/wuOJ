@@ -24,8 +24,10 @@ class FileSystemTestDataStoreTest {
     private FileSystemTestDataStore store(Path root) {
         return new FileSystemTestDataStore(new OjProperties(List.of(), new OjProperties.TestData(root),
                 new OjProperties.Judge("i", null, null, List.of(), temp, false, Duration.ZERO),
-                new OjProperties.RateLimit(3, Duration.ofSeconds(10), 2, Duration.ofSeconds(5)),
-                new OjProperties.LoginThrottle(5, Duration.ofMinutes(5))));
+                new OjProperties.RateLimit(3, Duration.ofSeconds(10), 2, Duration.ofSeconds(5), 30,
+                        Duration.ofMinutes(1)),
+                new OjProperties.LoginThrottle(5, 50, Duration.ofMinutes(5)),
+                new OjProperties.Registration(true, 5, Duration.ofHours(1))));
     }
 
     private List<TestCaseFiles> tests(String dir, String... pairs) throws IOException {

@@ -1,5 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { setSessionUser } from '@/mocks/db';
+import { server } from '@/mocks/node';
 import { apiPost, signIn } from '@/test/api';
 import { renderRoute } from '@/test/render';
 
@@ -73,5 +75,43 @@ describe('SubmissionDetailPage', () => {
       'href',
       '/submissions',
     );
+  });
+
+  it('shows admins the source code of any submission', async () => {
+    await signIn('admin');
+    renderRoute('/submissions/6');
+    const source = await screen.findByRole('textbox', { name: 'Source code' });
+    expect((source as HTMLTextAreaElement).value).toContain('int main');
+    expect(screen.getByRole('button', { name: 'Copy source code' })).toBeInTheDocument();
+  });
+
+  it('shows visitors the verdict without the source code, linking the user', async () => {
+    renderRoute('/submissions/6');
+    expect(await screen.findByRole('heading', { name: 'Submission #6' })).toBeInTheDocument();
+    expect(screen.getByText('Source code is only visible to its author.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'alice' })).toHaveAttribute('href', '/users/alice');
+  });
+
+  it('checks a submission by polling for visitors, without the live stream', async () => {
+    const streams: string[] = [];
+    server.events.on('request:start', ({ request }) => {
+      if (request.url.endsWith('/events')) streams.push(request.url);
+    });
+    await signIn();
+    const created = await (
+      await apiPost('/api/submissions', {
+        problemId: 1,
+        language: 'CPP17',
+        sourceCode: 'int main() {} // @mock-verdict: WA',
+      })
+    ).json();
+    setSessionUser(null);
+    renderRoute(`/submissions/${created.id}`);
+
+    expect(
+      (await screen.findAllByText('Wrong Answer', {}, { timeout: 4000 })).length,
+    ).toBeGreaterThan(0);
+    expect(streams).toHaveLength(0);
+    server.events.removeAllListeners();
   });
 });

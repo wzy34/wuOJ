@@ -1,4 +1,4 @@
-import { Radio, Select, Space, Table, Typography } from '@arco-design/web-react';
+import { Radio, Select, Space, Table, Tag, Typography } from '@arco-design/web-react';
 import type { ColumnProps } from '@arco-design/web-react/es/Table';
 import { keepPreviousData } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -7,6 +7,7 @@ import type { SubmissionSummary, Verdict } from '@/api/generated/model';
 import { useGetProblem, useListProblems } from '@/api/generated/problems/problems';
 import { useListSubmissions } from '@/api/generated/submissions/submissions';
 import { PageEmpty, PageError, PageLoading } from '@/components/PageState';
+import { useCurrentUser } from '@/features/auth/useCurrentUser';
 import { VerdictTag } from '@/components/VerdictTag';
 import { VERDICT_DISPLAY, VERDICT_OPTIONS } from '@/components/verdicts';
 import { formatDateTime, formatFromNow, formatMemory, formatTime } from '@/lib/format';
@@ -37,7 +38,14 @@ const columns: ColumnProps<SubmissionSummary>[] = [
       <span title={formatDateTime(createdAt)}>{formatFromNow(createdAt)}</span>
     ),
   },
-  { title: 'User', dataIndex: 'user.username', width: 130 },
+  {
+    title: 'User',
+    dataIndex: 'user.username',
+    width: 130,
+    render: (_: unknown, s) => (
+      <Link to={`/users/${encodeURIComponent(s.user.username)}`}>{s.user.username}</Link>
+    ),
+  },
   {
     title: 'Problem',
     dataIndex: 'problem.title',
@@ -93,14 +101,17 @@ function ProblemFilter({ value, onChange }: { value?: string; onChange: (slug?: 
 
 export function SubmissionListPage() {
   usePageTitle('Submissions');
+  const { user } = useCurrentUser();
   const { params, page, update } = useListSearchParams();
-  const scope = params.get('scope') === 'all' ? 'all' : 'mine';
+  // Visitors have no submissions of their own.
+  const scope = params.get('scope') === 'all' || !user ? 'all' : 'mine';
   const problem = params.get('problem') ?? undefined;
+  const byUser = params.get('user') ?? undefined;
   const verdictParam = params.get('verdict');
   const verdict = isVerdict(verdictParam) ? verdictParam : undefined;
 
   const submissions = useListSubmissions(
-    { page, size: PAGE_SIZE, scope, problem, verdict },
+    { page, size: PAGE_SIZE, scope, problem, user: byUser, verdict },
     {
       query: {
         placeholderData: keepPreviousData,
@@ -145,16 +156,23 @@ export function SubmissionListPage() {
           Submissions
         </Typography.Title>
         <Space wrap>
-          <Radio.Group
-            type="button"
-            aria-label="Whose submissions"
-            value={scope}
-            onChange={(value: string) => update({ scope: value === 'all' ? 'all' : undefined })}
-            options={[
-              { value: 'mine', label: 'Mine' },
-              { value: 'all', label: 'All users' },
-            ]}
-          />
+          {byUser && (
+            <Tag closable onClose={() => update({ user: undefined })} aria-label="User filter">
+              User: {byUser}
+            </Tag>
+          )}
+          {user && (
+            <Radio.Group
+              type="button"
+              aria-label="Whose submissions"
+              value={scope}
+              onChange={(value: string) => update({ scope: value === 'all' ? 'all' : undefined })}
+              options={[
+                { value: 'mine', label: 'Mine' },
+                { value: 'all', label: 'All users' },
+              ]}
+            />
+          )}
           <ProblemFilter value={problem} onChange={(slug) => update({ problem: slug })} />
           <Select
             aria-label="Filter by verdict"

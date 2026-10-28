@@ -12,9 +12,13 @@ C++17 submissions in Docker containers.
   read-only root, unprivileged user, CPU/memory/process/output limits. A small C runner measures each test.
 
 One application has two roles, set with `oj.roles`: `api` (HTTP, streams) and `worker` (queue consumer, sandbox).
-Both run in one process by default. See
-[`../openspec/changes/add-backend-student-core/design.md`](../openspec/changes/add-backend-student-core/design.md)
-for the reasoning behind each decision.
+Both run in one process by default. See the archived design records under
+[`../openspec/changes/archive/`](../openspec/changes/archive) for the reasoning behind each decision.
+
+People are **visitors** (no session: they can read problems, everyone's submissions without source code, and profiles),
+**users** (role `USER`: they register themselves, submit, and change their password) or **admins** (role `ADMIN`: they
+also see hidden problems and everyone's source code, and manage accounts). Every request checks its session against
+the account, so disabling an account, resetting its password or changing its role signs it out at once.
 
 ## Prerequisites
 
@@ -35,8 +39,9 @@ cd backend
 ./gradlew importDevData       # in another terminal: demo users and the six sample problems from ../dev-data
 ```
 
-Then run the web app against it with `cd ../frontend && pnpm dev` and open http://localhost:5173. Sign in as
-**`student` / `student`** (also `alice`, `bob`, and `admin` / `admin` who can see hidden problems).
+Then run the web app against it with `cd ../frontend && pnpm dev` and open http://localhost:5173. Browse as a
+visitor, register an account, or sign in as **`student` / `student`** (also `alice`, `bob`, and `admin` / `admin`, who
+can see hidden problems and manage accounts). The first admin of a new installation comes from `import-users`.
 
 `curl localhost:8080/actuator/health` shows the database, Redis, RabbitMQ and Docker (DOWN until the judge image is
 built). The RabbitMQ management UI is at http://localhost:15672 (`wuoj` / `wuoj`).
@@ -97,13 +102,13 @@ for how their tests are made.
 
 ```csv
 username,password,role,enabled
-carol,her-password,STUDENT,true
-teacher,another-password,ADMIN
+carol,her-password,USER,true
+operator,another-password,ADMIN
 ```
 
-`enabled` is optional (default `true`). Existing usernames (matched ignoring case) are updated, which is how passwords
-are reset. Passwords are stored as bcrypt hashes. A disabled account cannot sign in; its open sessions end at the idle
-timeout.
+`role` is `USER` or `ADMIN`; `enabled` is optional (default `true`). Existing usernames (matched ignoring case) are
+updated, and their open sessions end. Passwords are stored as bcrypt hashes; unlike registration, the importer does not
+apply the password rules. A disabled account cannot sign in. Day to day, admins manage accounts in the web app instead.
 
 ## Configuration
 
@@ -121,17 +126,36 @@ Set in `application.yaml`, or as environment variables (`OJ_JUDGE_SLOTS=4,5,6`) 
 | `oj.judge.simulated`                         | `false`              | The simulated judge (development only)                                                           |
 | `oj.rate-limit.submissions` / `.window`      | `3` / `10s`          | Submissions per user per sliding window                                                          |
 | `oj.rate-limit.unfinished`                   | `2`                  | Submissions a user may have waiting or running                                                   |
-| `oj.login-throttle.max-failures` / `.window` | `5` / `5m`           | Failed sign-ins per username before 429                                                          |
+| `oj.rate-limit.submissions-per-address`      | `30`                 | Submissions per client address (any accounts) per `oj.rate-limit.address-window` (`1m`)          |
+| `oj.login-throttle.max-failures` / `.window` | `5` / `5m`           | Failed sign-ins per username and client address before 429                                       |
+| `oj.login-throttle.max-failures-per-address` | `50`                 | Failed sign-ins per client address, for any usernames, per window                                |
+| `oj.registration.enabled`                    | `true`               | Whether visitors can register                                                                    |
+| `oj.registration.per-address` / `.window`    | `5` / `1h`           | Registrations per client address                                                                 |
 | `spring.session.timeout`                     | `8h`                 | Session idle timeout                                                                             |
+
+Per-address limits count IPv4 addresses whole and IPv6 addresses by their /64 prefix. They use the address the
+servlet container reports. Behind a reverse proxy, configure forwarded headers (`server.forward-headers-strategy`
+and the trusted proxies), or every client counts as the proxy's address and the limits apply to the whole site.
 
 If the worker itself runs in a container, mount `oj.judge.work-dir` and `oj.testdata.root` at the same paths as on
 the host: judge containers are started by the host's Docker daemon, which resolves bind mounts on the host.
+
+## Upgrading
+
+Sessions are stored Java-serialized in Redis. When the stored user changes shape (as in the release that added
+registration and the `USER` role), sessions written by the older version can no longer be read: they are treated as
+signed out, so everyone signs in again. To drop them right away:
+
+```bash
+redis-cli --scan --pattern 'spring:session:*' | xargs redis-cli del
+```
 
 ## Layout
 
 ```
 src/main/java/dev/wuoj/
-├── auth/        sign-in, sessions, CSRF, throttling
+├── auth/        sign-in, registration, password changes, sessions, CSRF, throttling
+├── user/        profiles, account administration, audit log
 ├── problem/     problem list and detail
 ├── submission/  submitting, listing, live status streams
 ├── judge/       queue, claims and leases, recovery, the simulated judge

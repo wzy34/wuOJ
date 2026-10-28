@@ -1,0 +1,5 @@
+# Reviewed exceptions to the lint rules.
+openapi.yaml:
+  # The options are public and take no input, so no client error is possible.
+  operation-4xx-response:
+    - '#/paths/~1api~1auth~1options/get/responses'

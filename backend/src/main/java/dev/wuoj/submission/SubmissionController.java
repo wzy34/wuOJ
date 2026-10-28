@@ -3,11 +3,12 @@ package dev.wuoj.submission;
 import java.io.IOException;
 import java.net.URI;
 
-import dev.wuoj.auth.AuthUser;
 import dev.wuoj.common.config.ConditionalOnRole;
 import dev.wuoj.common.config.Role;
 import dev.wuoj.common.domain.Language;
 import dev.wuoj.common.domain.Verdict;
+import dev.wuoj.common.domain.Viewer;
+import dev.wuoj.common.web.ClientAddress;
 import dev.wuoj.common.web.Page;
 import dev.wuoj.common.web.PageRequest;
 import dev.wuoj.common.web.ProblemResponses;
@@ -27,7 +28,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -71,28 +72,34 @@ public class SubmissionController {
     }
 
     @PostMapping
-    ResponseEntity<SubmissionDetail> create(@AuthenticationPrincipal AuthUser user,
-            @Valid @RequestBody CreateSubmissionRequest body) {
-        SubmissionDetail created = service.create(user.viewer(), body.problemId(), Language.valueOf(body.language()),
-                body.sourceCode());
+    ResponseEntity<SubmissionDetail> create(Viewer viewer, @Valid @RequestBody CreateSubmissionRequest body,
+            HttpServletRequest request) {
+        SubmissionDetail created = service.create(viewer, ClientAddress.of(request), body.problemId(),
+                Language.valueOf(body.language()), body.sourceCode());
         return ResponseEntity.created(URI.create("/api/submissions/" + created.id())).body(created);
     }
 
+    /** {@code scope=mine} needs a session; the security configuration lets visitors in for {@code scope=all}. */
     @GetMapping
-    Page<SubmissionSummary> list(@AuthenticationPrincipal AuthUser user,
+    Page<SubmissionSummary> list(Viewer viewer,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(PageRequest.MAX_SIZE) int size,
             @RequestParam(defaultValue = "mine") Scope scope,
             @RequestParam(required = false) @Nullable String problem,
+            @RequestParam(required = false) @Nullable String user,
             @RequestParam(required = false) @Nullable Verdict verdict) {
+        if (scope == Scope.mine && !viewer.signedIn()) {
+            throw new InsufficientAuthenticationException("Sign in to see your submissions.");
+        }
         String slug = problem == null || problem.isBlank() ? null : problem.strip();
-        return submissions.list(user.viewer(), scope == Scope.mine, slug, verdict, new PageRequest(page, size))
+        String username = user == null || user.isBlank() ? null : user.strip();
+        return submissions.list(viewer, scope == Scope.mine, slug, username, verdict, new PageRequest(page, size))
                 .map(SubmissionSummary::of);
     }
 
     @GetMapping("/{id}")
-    SubmissionDetail get(@AuthenticationPrincipal AuthUser user, @PathVariable long id) {
-        return service.detail(user.viewer(), id);
+    SubmissionDetail get(Viewer viewer, @PathVariable long id) {
+        return service.detail(viewer, id);
     }
 
     /**
@@ -100,9 +107,9 @@ public class SubmissionController {
      * this endpoint only accept {@code text/event-stream} and content negotiation would reject a problem body.
      */
     @GetMapping(path = "/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Nullable SseEmitter events(@AuthenticationPrincipal AuthUser user, @PathVariable long id,
-            HttpServletRequest request, HttpServletResponse response) throws IOException {
-        if (submissions.find(user.viewer(), id).isEmpty()) {
+    @Nullable SseEmitter events(Viewer viewer, @PathVariable long id, HttpServletRequest request,
+            HttpServletResponse response) throws IOException {
+        if (submissions.find(viewer, id).isEmpty()) {
             problems.write(request, response, HttpStatus.NOT_FOUND, "Submission not found.");
             return null;
         }

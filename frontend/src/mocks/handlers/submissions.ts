@@ -23,6 +23,7 @@ import {
   parsePaging,
   problemResponse,
   requireUser,
+  viewer,
 } from './util';
 
 const VERDICTS = ['AC', 'WA', 'TLE', 'MLE', 'RE', 'CE', 'OLE', 'SE'] as const;
@@ -42,11 +43,11 @@ function toSummary(s: MockSubmission): SubmissionSummary {
   };
 }
 
-/** Source code and compiler output are only for the owner. */
-function toDetail(s: MockSubmission, viewer: MockUser): SubmissionDetail {
+/** Source code and compiler output are only for the owner and for admins. */
+function toDetail(s: MockSubmission, reader: MockUser | undefined): SubmissionDetail {
   const { sourceCode, compileOutput, ...rest } = s;
   const detail: SubmissionDetail = { ...rest, testResults: [...s.testResults] };
-  if (s.user.id === viewer.id) {
+  if (reader && (s.user.id === reader.id || reader.role === 'ADMIN')) {
     detail.sourceCode = sourceCode;
     if (compileOutput) detail.compileOutput = compileOutput;
   }
@@ -79,7 +80,7 @@ function validate(body: Record<string, unknown>): FieldError[] {
 export const submissionHandlers = [
   http.get('/api/submissions', async ({ request }) => {
     await latency();
-    const user = requireUser();
+    const user = viewer();
     if (user instanceof Response) return user;
 
     const url = new URL(request.url);
@@ -93,11 +94,16 @@ export const submissionHandlers = [
     if (!scope || (verdictParam && !verdict)) {
       return problemResponse(400, 'Bad Request', 'Invalid filter.');
     }
+    if (scope === 'mine' && !user) {
+      return problemResponse(401, 'Unauthorized', 'Sign in to see your submissions.');
+    }
     const problemSlug = url.searchParams.get('problem');
+    const username = url.searchParams.get('user')?.toLowerCase();
 
     const matches = db.submissions
-      .filter((s) => scope === 'all' || s.user.id === user.id)
+      .filter((s) => scope === 'all' || s.user.id === user?.id)
       .filter((s) => !problemSlug || s.problem.slug === problemSlug)
+      .filter((s) => !username || s.user.username.toLowerCase() === username)
       .filter((s) => !verdict || s.verdict === verdict)
       .sort((a, b) => b.id - a.id)
       .map(toSummary);
@@ -155,7 +161,7 @@ export const submissionHandlers = [
 
   http.get('/api/submissions/:id', async ({ params }) => {
     await latency();
-    const user = requireUser();
+    const user = viewer();
     if (user instanceof Response) return user;
 
     const submission = db.submissions.find((s) => s.id === Number(params.id));

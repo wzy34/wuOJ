@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { STARTER_TEMPLATE } from './starterTemplate';
-import { draftKey, useDraft } from './useDraft';
+import { adoptGuestDrafts, draftKey, useDraft } from './useDraft';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -55,5 +55,29 @@ describe('useDraft', () => {
     act(() => result.current.setCode('still works'));
     expect(result.current.code).toBe('still works');
     expect(() => unmount()).not.toThrow();
+  });
+
+  it('keeps a visitor draft under the guest key', () => {
+    const { result, unmount } = renderHook(() => useDraft('guest', 7));
+    act(() => result.current.setCode('guest code'));
+    unmount();
+    expect(localStorage.getItem(draftKey('guest', 7))).toBe('guest code');
+  });
+});
+
+describe('adoptGuestDrafts', () => {
+  it('gives guest drafts to the user who signs in', () => {
+    localStorage.setItem(draftKey('guest', 7), 'written as a visitor');
+    adoptGuestDrafts(3);
+    expect(localStorage.getItem(draftKey(3, 7))).toBe('written as a visitor');
+    expect(localStorage.getItem(draftKey('guest', 7))).toBeNull();
+  });
+
+  it("never overwrites the user's own draft", () => {
+    localStorage.setItem(draftKey('guest', 7), 'written as a visitor');
+    localStorage.setItem(draftKey(3, 7), 'my own draft');
+    adoptGuestDrafts(3);
+    expect(localStorage.getItem(draftKey(3, 7))).toBe('my own draft');
+    expect(localStorage.getItem(draftKey('guest', 7))).toBeNull();
   });
 });

@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test('a student signs in, submits code and follows the verdict to the details', async ({
-  page,
-}) => {
+test('a user signs in, submits code and follows the verdict to the details', async ({ page }) => {
+  // Visitors land on the problem list and sign in from the top bar.
   await page.goto('/');
+  await expect(page).toHaveURL(/\/problems$/);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/login/);
 
   await page.getByLabel('Username').fill('student');

@@ -2,16 +2,17 @@ import { Alert, Button, Card, Form, Input, Typography } from '@arco-design/web-r
 import { IconLock, IconUser } from '@arco-design/web-react/icon';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { getGetCurrentUserQueryKey, useLogin } from '@/api/generated/auth/auth';
 import type { LoginRequest } from '@/api/generated/model';
 import { getApiProblem, getHttpStatus } from '@/api/http';
 import { FullPageSpinner } from '@/components/PageState';
+import { adoptGuestDrafts } from '@/features/problems/useDraft';
 import { APP_NAME } from '@/lib/constants';
 import { usePageTitle } from '@/lib/usePageTitle';
 import styles from './LoginPage.module.css';
-import { safeRedirect } from './safeRedirect';
-import { useCurrentUser } from './useCurrentUser';
+import { registerPath, safeRedirect } from './safeRedirect';
+import { useCurrentUser, useRegistrationOpen } from './useCurrentUser';
 
 export const INVALID_CREDENTIALS = 'Invalid username or password';
 
@@ -22,12 +23,14 @@ export function LoginPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, isPending: checkingSession } = useCurrentUser();
+  const registrationOpen = useRegistrationOpen();
   const [error, setError] = useState<string>();
   const target = safeRedirect(searchParams.get('redirect'));
 
   const login = useLogin({
     mutation: {
       onSuccess: (signedIn) => {
+        adoptGuestDrafts(signedIn.id);
         queryClient.setQueryData(getGetCurrentUserQueryKey(), signedIn);
         void navigate(target, { replace: true });
       },
@@ -54,7 +57,7 @@ export function LoginPage() {
           {APP_NAME}
         </Typography.Title>
         <Typography.Paragraph type="secondary" className={styles.subtitle}>
-          Sign in with the account from your teacher or club admin.
+          Sign in to submit solutions and follow your progress.
         </Typography.Paragraph>
         {error && <Alert type="error" content={error} className={styles.alert} />}
         <Form
@@ -84,6 +87,14 @@ export function LoginPage() {
             Sign in
           </Button>
         </Form>
+        {registrationOpen && (
+          <Typography.Paragraph className={styles.switch}>
+            New here? <Link to={registerPath(target)}>Create an account</Link>
+          </Typography.Paragraph>
+        )}
+        <Typography.Paragraph className={styles.switch}>
+          <Link to="/problems">Browse problems without signing in</Link>
+        </Typography.Paragraph>
       </Card>
     </main>
   );

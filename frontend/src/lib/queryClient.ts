@@ -1,6 +1,7 @@
 import { Message } from '@arco-design/web-react';
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
+import { getGetCurrentUserQueryKey } from '@/api/generated/auth/auth';
 
 /**
  * Network failures and 5xx responses get a global notification. 4xx responses are expected
@@ -48,4 +49,15 @@ export function createQueryClient({
       },
     },
   });
+}
+
+/**
+ * After sign-out or an ended session: the page is now a visitor's. Everything cached for the
+ * previous user is dropped, and the queries of mounted components fetch again as a visitor.
+ */
+export function resetToVisitor(queryClient: QueryClient): void {
+  const session = getGetCurrentUserQueryKey();
+  queryClient.setQueryData(session, null);
+  queryClient.removeQueries({ type: 'inactive' });
+  void queryClient.resetQueries({ predicate: ({ queryKey }) => queryKey[0] !== session[0] });
 }

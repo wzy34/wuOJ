@@ -51,6 +51,21 @@ class OjPropertiesTest {
     }
 
     @Test
+    void limitDefaults() {
+        new ApplicationContextRunner()
+                .withUserConfiguration(PropertiesConfig.class)
+                .run(context -> {
+                    OjProperties properties = context.getBean(OjProperties.class);
+                    assertThat(properties.loginThrottle()).isEqualTo(
+                            new OjProperties.LoginThrottle(5, 50, Duration.ofMinutes(5)));
+                    assertThat(properties.registration()).isEqualTo(
+                            new OjProperties.Registration(true, 5, Duration.ofHours(1)));
+                    assertThat(properties.rateLimit()).isEqualTo(new OjProperties.RateLimit(3,
+                            Duration.ofSeconds(10), 2, Duration.ofSeconds(5), 30, Duration.ofMinutes(1)));
+                });
+    }
+
+    @Test
     void contextFailsToStartWithSharedSlots() {
         new ApplicationContextRunner()
                 .withUserConfiguration(PropertiesConfig.class)

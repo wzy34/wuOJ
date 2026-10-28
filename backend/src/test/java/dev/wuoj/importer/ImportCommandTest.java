@@ -44,7 +44,7 @@ class ImportCommandTest extends RealServerTest {
 
     @Test
     void importsUsersAndProblems() throws Exception {
-        Path users = Files.writeString(temp.resolve("users.csv"), "username,password,role\nstudent,secret,STUDENT\n");
+        Path users = Files.writeString(temp.resolve("users.csv"), "username,password,role\nstudent,secret,USER\n");
         Run userRun = run("import-users", users.toString());
         assertThat(userRun.exitCode()).isZero();
         assertThat(userRun.output()).contains("1 created, 0 updated").doesNotContain("secret");

@@ -17,27 +17,32 @@ class ContractValidatorTest {
 
     @Test
     void conformingBodyPasses() {
-        assertThat(valid("{\"id\":1,\"username\":\"student\",\"role\":\"STUDENT\"}")).isTrue();
+        assertThat(valid("{\"id\":1,\"username\":\"student\",\"role\":\"USER\",\"mustChangePassword\":false}"))
+                .isTrue();
     }
 
     @Test
     void undocumentedFieldFails() {
-        assertThat(valid("{\"id\":1,\"username\":\"student\",\"role\":\"STUDENT\",\"password\":\"x\"}")).isFalse();
+        assertThat(valid("{\"id\":1,\"username\":\"student\",\"role\":\"USER\",\"mustChangePassword\":false,"
+                + "\"password\":\"x\"}")).isFalse();
     }
 
     @Test
     void missingRequiredFieldFails() {
-        assertThat(valid("{\"id\":1,\"role\":\"STUDENT\"}")).isFalse();
+        assertThat(valid("{\"id\":1,\"role\":\"USER\",\"mustChangePassword\":false}")).isFalse();
     }
 
     @Test
     void wrongEnumValueFails() {
-        assertThat(valid("{\"id\":1,\"username\":\"student\",\"role\":\"TEACHER\"}")).isFalse();
+        assertThat(valid("{\"id\":1,\"username\":\"student\",\"role\":\"STUDENT\",\"mustChangePassword\":false}"))
+                .isFalse();
     }
 
     @Test
     void everyOperationOfTheContractIsKnown() {
         assertThat(Contract.operationIds()).contains("login", "logout", "getCurrentUser", "listProblems", "getProblem",
-                "listSubmissions", "createSubmission", "getSubmission", "streamSubmissionEvents");
+                "listSubmissions", "createSubmission", "getSubmission", "streamSubmissionEvents", "register",
+                "getAuthOptions", "changePassword", "getUserProfile", "listAdminUsers", "updateAdminUser",
+                "resetUserPassword", "listAuditEntries");
     }
 }

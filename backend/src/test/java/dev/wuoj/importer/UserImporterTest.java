@@ -2,6 +2,7 @@ package dev.wuoj.importer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -40,7 +41,7 @@ class UserImporterTest extends IntegrationTest {
     @Test
     void createAndUpdate() throws Exception {
         fixtures.user("bob");
-        var summary = importer.importCsv(csv("username,password,role\ncarol,carol-pw,STUDENT\nbob,new-pw,ADMIN\n"));
+        var summary = importer.importCsv(csv("username,password,role\ncarol,carol-pw,USER\nbob,new-pw,ADMIN\n"));
 
         assertThat(summary).isEqualTo(new UserImporter.Summary(1, 1));
         assertThat(signIn("carol", "carol-pw")).isEqualTo(200);
@@ -53,16 +54,16 @@ class UserImporterTest extends IntegrationTest {
 
     @Test
     void invalidRowAppliesNothing() throws Exception {
-        Path file = csv("username,password,role\ncarol,pw,STUDENT\ndave,pw,TEACHER\n");
+        Path file = csv("username,password,role\ncarol,pw,USER\ndave,pw,STUDENT\n");
         assertThatThrownBy(() -> importer.importCsv(file))
                 .isInstanceOfSatisfying(UserImporter.InvalidCsvException.class, e -> assertThat(e.errors())
-                        .containsExactly("line 3: role 'TEACHER' is invalid (STUDENT or ADMIN)"));
+                        .containsExactly("line 3: role 'STUDENT' is invalid (USER or ADMIN)"));
         assertThat(users.findByUsername("carol")).isEmpty();
     }
 
     @Test
     void everyInvalidRowIsReported() throws Exception {
-        Path file = csv("username,password,role,enabled\nbad name,pw,STUDENT,true\nok,,STUDENT,\nOK,pw,ADMIN,maybe\n");
+        Path file = csv("username,password,role,enabled\nbad name,pw,USER,true\nok,,USER,\nOK,pw,ADMIN,maybe\n");
         assertThatThrownBy(() -> importer.importCsv(file))
                 .isInstanceOfSatisfying(UserImporter.InvalidCsvException.class, e -> assertThat(e.errors())
                         .anySatisfy(m -> assertThat(m).startsWith("line 2: username 'bad name' is invalid"))
@@ -71,7 +72,7 @@ class UserImporterTest extends IntegrationTest {
 
     @Test
     void duplicateUsernamesIgnoringCase() throws Exception {
-        Path file = csv("username,password,role\nAnn,pw,STUDENT\nann,pw,STUDENT\n");
+        Path file = csv("username,password,role\nAnn,pw,USER\nann,pw,USER\n");
         assertThatThrownBy(() -> importer.importCsv(file))
                 .isInstanceOfSatisfying(UserImporter.InvalidCsvException.class, e -> assertThat(e.errors())
                         .containsExactly("line 3: username 'ann' appears more than once"));
@@ -79,7 +80,7 @@ class UserImporterTest extends IntegrationTest {
 
     @Test
     void missingColumn() throws Exception {
-        Path file = csv("username,role\nann,STUDENT\n");
+        Path file = csv("username,role\nann,USER\n");
         assertThatThrownBy(() -> importer.importCsv(file))
                 .isInstanceOfSatisfying(UserImporter.InvalidCsvException.class, e -> assertThat(e.errors())
                         .containsExactly("line 1: missing column 'password'"));
@@ -87,16 +88,28 @@ class UserImporterTest extends IntegrationTest {
 
     @Test
     void disabledUserCannotSignIn() throws Exception {
-        importer.importCsv(csv("username,password,role,enabled\nerin,pw,STUDENT,false\n"));
+        importer.importCsv(csv("username,password,role,enabled\nerin,pw,USER,false\n"));
         assertThat(users.findByUsername("erin").orElseThrow().enabled()).isFalse();
         assertThat(signIn("erin", "pw")).isEqualTo(401);
     }
 
     @Test
     void reenablingRestoresAccess() throws Exception {
-        importer.importCsv(csv("username,password,role,enabled\nerin,pw,STUDENT,false\n"));
-        importer.importCsv(csv("username,password,role\nerin,pw,STUDENT\n"));
+        importer.importCsv(csv("username,password,role,enabled\nerin,pw,USER,false\n"));
+        importer.importCsv(csv("username,password,role\nerin,pw,USER\n"));
         assertThat(signIn("erin", "pw")).isEqualTo(200);
         mvc.perform(post("/api/auth/logout")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void disablingByImportEndsSessions() throws Exception {
+        importer.importCsv(csv("username,password,role\nbob,bob,USER\n"));
+        var bob = session().signIn("bob", "bob");
+        bob.perform(get("/api/submissions")).andExpect(status().isOk());
+
+        importer.importCsv(csv("username,password,role,enabled\nbob,bob,USER,false\n"));
+
+        bob.perform(get("/api/submissions")).andExpect(status().isUnauthorized());
+        assertThat(signIn("bob", "bob")).isEqualTo(401);
     }
 }

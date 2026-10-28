@@ -11,18 +11,19 @@ import {
 import type { ColumnProps } from '@arco-design/web-react/es/Table';
 import { IconCheckCircleFill, IconMinusCircle } from '@arco-design/web-react/icon';
 import { keepPreviousData } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { Link } from 'react-router';
 import { useListProblems } from '@/api/generated/problems/problems';
+import { useCurrentUser } from '@/features/auth/useCurrentUser';
 import type { ProblemSummary, ProblemUserStatus } from '@/api/generated/model';
 import { PageEmpty, PageError, PageLoading } from '@/components/PageState';
 import { useListSearchParams } from '@/lib/searchParams';
 import { usePageTitle } from '@/lib/usePageTitle';
+import { useSearchBox } from '@/lib/useSearchBox';
 import { DIFFICULTIES, DIFFICULTY_DISPLAY, isDifficulty } from './difficulty';
 import styles from './ProblemListPage.module.css';
 
 const PAGE_SIZE = 20;
-const SEARCH_DELAY_MS = 300;
 
 function StatusIcon({ status }: { status: ProblemUserStatus }) {
   if (status === 'NONE') return null;
@@ -63,27 +64,19 @@ const columns: ColumnProps<ProblemSummary>[] = [
 
 export function ProblemListPage() {
   usePageTitle('Problems');
+  // Visitors have no status to show.
+  const { user } = useCurrentUser();
   const { params, page, update } = useListSearchParams();
   const q = params.get('q') ?? '';
   const difficultyParam = params.get('difficulty');
   const difficulty = isDifficulty(difficultyParam) ? difficultyParam : undefined;
 
   // The box updates immediately; the URL (and the request) follow once typing pauses.
-  const [search, setSearch] = useState(q);
-  // When the URL changes from outside (back button, "Clear search"), show its value in the box.
-  const [shownQ, setShownQ] = useState(q);
-  if (q !== shownQ) {
-    setShownQ(q);
-    setSearch(q);
-  }
-  useEffect(() => {
-    if (search.trim() === q) return;
-    const timer = setTimeout(
-      () => update({ q: search.trim() }, { replace: true }),
-      SEARCH_DELAY_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [search, q, update]);
+  const applySearch = useCallback(
+    (value: string) => update({ q: value }, { replace: true }),
+    [update],
+  );
+  const [search, setSearch] = useSearchBox(q, applySearch);
 
   const problems = useListProblems(
     { page, size: PAGE_SIZE, q: q || undefined, difficulty },
@@ -113,7 +106,7 @@ export function ProblemListPage() {
     body = (
       <Table
         rowKey="id"
-        columns={columns}
+        columns={user ? columns : columns.filter((column) => column.dataIndex !== 'status')}
         data={problems.data.items}
         loading={problems.isFetching}
         pagination={{

@@ -56,13 +56,14 @@ public class SubmissionRepository {
         return jdbc.sql(sql.sql()).params(sql.params()).query((rs, n) -> row(rs, true)).optional();
     }
 
-    /** Newest first. {@code problemSlug} and {@code verdict} are optional filters. */
+    /** Newest first. {@code problemSlug}, {@code username} (ignoring case) and {@code verdict} are optional. */
     public Page<SubmissionRow> list(Viewer viewer, boolean onlyMine, @Nullable String problemSlug,
-            @Nullable Verdict verdict, PageRequest page) {
+            @Nullable String username, @Nullable Verdict verdict, PageRequest page) {
         SqlBuilder filter = new SqlBuilder(FROM);
         if (onlyMine) filter.where("s.user_id = :userId", "userId", viewer.userId());
         if (!viewer.seesHiddenProblems()) filter.where("p.visible");
         if (problemSlug != null) filter.where("p.slug = :slug", "slug", problemSlug);
+        if (username != null) filter.where("lower(u.username) = lower(:username)", "username", username);
         if (verdict != null) filter.where("s.verdict = :verdict", "verdict", verdict.name());
 
         long total = jdbc.sql("SELECT count(*)" + filter.sql()).params(filter.params()).query(Long.class).single();

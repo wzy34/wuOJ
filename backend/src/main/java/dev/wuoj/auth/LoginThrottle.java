@@ -9,8 +9,8 @@ import dev.wuoj.common.web.RateLimitedException;
 import org.springframework.stereotype.Component;
 
 /**
- * Limits failed sign-ins per username. Deliberately not per address: a classroom often shares one NAT address, and
- * one student's typos must not lock out the whole class.
+ * Limits failed sign-ins per username and client address together, and per client address alone. Not per username
+ * alone: on a public site that would let anyone lock any account out.
  */
 @Component
 public class LoginThrottle {
@@ -23,9 +23,10 @@ public class LoginThrottle {
         this.config = properties.loginThrottle();
     }
 
-    /** Throws if the username has too many recent failures, even if this attempt's password is right. */
-    public void check(String username) {
-        Duration wait = limiter.check(key(username), config.maxFailures(), config.window());
+    /** Throws if either limit is reached, even if this attempt's password is right. */
+    public void check(String username, String address) {
+        Duration wait = max(limiter.check(userKey(username, address), config.maxFailures(), config.window()),
+                limiter.check(addressKey(address), config.maxFailuresPerAddress(), config.window()));
         if (!wait.isZero()) {
             long seconds = SlidingWindowLimiter.seconds(wait);
             throw new RateLimitedException(seconds,
@@ -33,11 +34,20 @@ public class LoginThrottle {
         }
     }
 
-    public void recordFailure(String username) {
-        limiter.record(key(username), config.window());
+    public void recordFailure(String username, String address) {
+        limiter.record(userKey(username, address), config.window());
+        limiter.record(addressKey(address), config.window());
     }
 
-    private static String key(String username) {
-        return "oj:rl:login:" + username.toLowerCase(Locale.ROOT);
+    private static String userKey(String username, String address) {
+        return "oj:rl:login:" + username.toLowerCase(Locale.ROOT) + ":" + address;
+    }
+
+    private static String addressKey(String address) {
+        return "oj:rl:login-ip:" + address;
+    }
+
+    private static Duration max(Duration a, Duration b) {
+        return a.compareTo(b) >= 0 ? a : b;
     }
 }

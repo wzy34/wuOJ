@@ -46,6 +46,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(ProblemResponses.problem(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage()));
     }
 
+    @ExceptionHandler(InvalidFieldsException.class)
+    ResponseEntity<ProblemDetail> invalidFields(InvalidFieldsException ex) {
+        ProblemDetail body = ProblemResponses.problem(HttpStatus.BAD_REQUEST, INVALID);
+        body.setProperty("errors", ex.errors());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    ResponseEntity<ProblemDetail> conflict(ConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ProblemResponses.problem(HttpStatus.CONFLICT, ex.getMessage()));
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    ResponseEntity<ProblemDetail> forbidden(ForbiddenException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ProblemResponses.problem(HttpStatus.FORBIDDEN, ex.getMessage()));
+    }
+
     /** Security exceptions are left to Spring Security's handlers; anything else is a bug. */
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> unexpected(Exception ex) throws Exception {

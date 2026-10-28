@@ -37,12 +37,12 @@ public class Fixtures {
 
     public void clear() {
         jdbc.sql("TRUNCATE users, problems, problem_samples, problem_testdata, submissions, "
-                + "submission_test_results, user_problem_status RESTART IDENTITY CASCADE").update();
+                + "submission_test_results, user_problem_status, audit_log RESTART IDENTITY CASCADE").update();
     }
 
     /** A user whose password equals the username. */
     public long user(String username) {
-        return user(username, UserRole.STUDENT);
+        return user(username, UserRole.USER);
     }
 
     public long user(String username, UserRole role) {

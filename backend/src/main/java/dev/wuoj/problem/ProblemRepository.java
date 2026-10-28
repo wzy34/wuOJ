@@ -21,12 +21,15 @@ public class ProblemRepository {
     /** Numeric display ids sort numerically: shorter first, then by text. */
     private static final String ORDER = "ORDER BY length(p.display_id), p.display_id";
 
-    private static final String SELECT = """
+    private static final String SELECT_FOR_USER = """
             SELECT p.*,
                    CASE WHEN s.solved THEN 'SOLVED' WHEN s.user_id IS NOT NULL THEN 'ATTEMPTED' ELSE 'NONE' END
                        AS user_status
               FROM problems p
               LEFT JOIN user_problem_status s ON s.problem_id = p.id AND s.user_id = :userId""";
+
+    /** Visitors have no status. */
+    private static final String SELECT_FOR_VISITOR = "SELECT p.*, 'NONE' AS user_status FROM problems p";
 
     private static final RowMapper<ProblemRow> ROW = (rs, n) -> new ProblemRow(rs.getLong("id"),
             rs.getString("display_id"), rs.getString("slug"), rs.getString("title"),
@@ -45,7 +48,8 @@ public class ProblemRepository {
      */
     public Page<ProblemRow> list(Viewer viewer, @Nullable String query, @Nullable Difficulty difficulty,
             PageRequest page) {
-        SqlBuilder filter = new SqlBuilder("").param("userId", viewer.userId());
+        SqlBuilder filter = new SqlBuilder("");
+        if (viewer.signedIn()) filter.param("userId", viewer.userId());
         if (!viewer.seesHiddenProblems()) filter.where("p.visible");
         if (query != null) filter.where("p.title ILIKE :q ESCAPE '\\'", "q", SqlBuilder.likeContains(query));
         if (difficulty != null) filter.where("p.difficulty = :difficulty", "difficulty", difficulty.name());
@@ -54,7 +58,7 @@ public class ProblemRepository {
                 .params(filter.params())
                 .query(Long.class)
                 .single();
-        List<ProblemRow> items = jdbc.sql(SELECT + filter.sql() + " " + ORDER + " LIMIT :limit OFFSET :offset")
+        List<ProblemRow> items = jdbc.sql(select(viewer) + filter.sql() + " " + ORDER + " LIMIT :limit OFFSET :offset")
                 .params(filter.params())
                 .param("limit", page.size())
                 .param("offset", page.offset())
@@ -72,9 +76,14 @@ public class ProblemRepository {
     }
 
     private Optional<ProblemRow> find(Viewer viewer, String condition, Object key) {
-        SqlBuilder sql = new SqlBuilder(SELECT).param("userId", viewer.userId()).where(condition, "key", key);
+        SqlBuilder sql = new SqlBuilder(select(viewer)).where(condition, "key", key);
+        if (viewer.signedIn()) sql.param("userId", viewer.userId());
         if (!viewer.seesHiddenProblems()) sql.where("p.visible");
         return jdbc.sql(sql.sql()).params(sql.params()).query(ROW).optional();
+    }
+
+    private static String select(Viewer viewer) {
+        return viewer.signedIn() ? SELECT_FOR_USER : SELECT_FOR_VISITOR;
     }
 
     public List<Sample> samples(long problemId) {

@@ -2,19 +2,27 @@
 
 ## Purpose
 
-Lets students find problems to work on and see at a glance which ones they have already solved or attempted.
+Lets visitors and users find problems to work on, and lets signed-in users see at a glance which ones they have already solved or attempted.
 
 ## Requirements
 
 ### Requirement: Problem list
-`/problems` SHALL show a paged table of problems with, for each: its display number, title, difficulty (Easy, Medium or Hard) and the signed-in student's status (Solved, Attempted or not tried). Selecting a problem title SHALL open its workspace at `/problems/:slug`.
+`/problems` SHALL show a paged table of problems to visitors and signed-in users alike. For each problem it SHALL show:
+- its display number, title and difficulty (Easy, Medium or Hard);
+- for signed-in users, their status (Solved, Attempted or not tried). Visitors SHALL see no status column.
+
+Selecting a problem title SHALL open its workspace at `/problems/:slug`.
 
 #### Scenario: Viewing the list
-- **WHEN** a student opens `/problems`
+- **WHEN** a signed-in user opens `/problems`
 - **THEN** the first 20 problems are shown with number, title, difficulty and status
 
+#### Scenario: Visitor views the list
+- **WHEN** a visitor opens `/problems`
+- **THEN** the first 20 problems are shown with number, title and difficulty, without a status column and without being sent to the login page
+
 #### Scenario: Opening a problem
-- **WHEN** a student clicks the title "A + B"
+- **WHEN** a visitor or user clicks the title "A + B"
 - **THEN** the browser navigates to `/problems/a-plus-b`
 
 ### Requirement: Solved status

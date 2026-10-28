@@ -60,9 +60,16 @@ oj:
     window: 10s
     unfinished: 2
     unfinished-retry-after: 5s
+    submissions-per-address: 30
+    address-window: 1m
   login-throttle:
     max-failures: 5
+    max-failures-per-address: 50
     window: 5m
+  registration:
+    enabled: true
+    per-address: 5
+    window: 1h
 
 logging:
   level:

@@ -43,7 +43,8 @@ class DevDataImportTest extends IntegrationTest {
         student.perform(get("/api/problems/a-plus-b"))
                 .andExpect(jsonPath("$.title").value("A + B"))
                 .andExpect(jsonPath("$.samples.length()").value(2));
-        session().signIn("admin", "admin");
+        student.perform(get("/api/auth/me")).andExpect(jsonPath("$.role").value("USER"));
+        session().signIn("admin", "admin").perform(get("/api/auth/me")).andExpect(jsonPath("$.role").value("ADMIN"));
         session().signIn("alice", "alice");
         session().signIn("bob", "bob");
         assertThat(problems.importPath(DEV_DATA.resolve("problems")))

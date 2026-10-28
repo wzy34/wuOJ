@@ -6,6 +6,7 @@ import { getHttpStatus } from '@/api/http';
 import { LazyCodeEditor } from '@/components/LazyCodeEditor';
 import { CopyButton } from '@/components/CopyButton';
 import { NotFoundState, PageError, PageLoading } from '@/components/PageState';
+import { useCurrentUser } from '@/features/auth/useCurrentUser';
 import { VerdictTag } from '@/components/VerdictTag';
 import { formatDateTime, formatMemory, formatTime } from '@/lib/format';
 import { usePageTitle } from '@/lib/usePageTitle';
@@ -31,7 +32,14 @@ function Summary({ submission }: { submission: SubmissionDetail }) {
       layout="vertical"
       border
       data={[
-        { label: 'User', value: submission.user.username },
+        {
+          label: 'User',
+          value: (
+            <Link to={`/users/${encodeURIComponent(submission.user.username)}`}>
+              {submission.user.username}
+            </Link>
+          ),
+        },
         {
           label: 'Problem',
           value: (
@@ -105,7 +113,8 @@ export function SubmissionDetailPage() {
   const params = useParams();
   const id = Number(params.id);
   const validId = Number.isInteger(id) && id > 0;
-  const submission = useSubmissionLive(validId ? id : undefined);
+  const { user } = useCurrentUser();
+  const submission = useSubmissionLive(validId ? id : undefined, { live: user !== undefined });
   usePageTitle(`Submission #${params.id}`);
 
   if (!validId || getHttpStatus(submission.error) === 404) {

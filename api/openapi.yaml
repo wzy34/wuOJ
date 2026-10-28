@@ -1,20 +1,29 @@
 openapi: 3.1.0
 info:
   title: wuOJ API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    Contract between the wuOJ web app and the judge backend (student core).
+    Contract between the wuOJ web app and the judge backend.
+
+    Roles: visitors (no session), users (role `USER`) and admins (role `ADMIN`).
 
     Conventions:
-    - **Sessions**: `POST /api/auth/login` sets an HTTP-only session cookie. Requests to protected
-      endpoints without a valid session get `401`.
+    - **Sessions**: `POST /api/auth/login` and `POST /api/auth/register` set an HTTP-only session
+      cookie. Operations whose `security` allows `{}` also answer without a session, as for a visitor;
+      every other operation needs a valid session and answers `401` without one. Admin operations
+      answer `403` to users who are not admins.
+    - **Revocation**: disabling an account, resetting its password or changing its role ends its
+      sessions immediately; the next request is treated as having no session.
+    - **Forced password change**: while `CurrentUser.mustChangePassword` is true, every request with
+      that session gets `403` except `GET /api/auth/me`, `GET /api/auth/options`,
+      `POST /api/auth/logout` and `POST /api/account/password`.
     - **CSRF**: every `POST`/`PUT`/`PATCH`/`DELETE` must send an `X-XSRF-TOKEN` header equal to the
       `XSRF-TOKEN` cookie, otherwise `403`. The server issues the `XSRF-TOKEN` cookie on every
       response to `GET /api/auth/me`, which clients call on startup before any state-changing request.
     - **Errors**: RFC 9457 problem details (`application/problem+json`), see `ApiProblem`.
     - **Paging**: `page` is 1-based (default 1), `size` defaults to 20 and is at most 100.
     - **Hidden data**: inputs and expected outputs of non-sample tests are never returned. Submission
-      source code and compiler output are returned only to the submission's owner.
+      source code and compiler output are returned only to the submission's owner and to admins.
 servers:
   - url: /
 tags:
@@ -24,6 +33,12 @@ tags:
     description: Problem browsing
   - name: submissions
     description: Submitting code and reviewing submissions
+  - name: account
+    description: The signed-in user's own account
+  - name: users
+    description: Public user profiles
+  - name: admin
+    description: Account administration (admins only)
 security:
   - sessionCookie: []
 
@@ -82,6 +97,54 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: Create an account and sign in as it
+      description: |
+        Creates a `USER` account and starts a session for it, like `POST /api/auth/login`. The username
+        must not be taken (ignoring case) or reserved. The password must be 8–128 characters, differ
+        from the username and not be a commonly used password; violations are field errors.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered and signed in; the session cookie is set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Missing or invalid CSRF token, or registration is closed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/auth/options:
+    get:
+      tags: [auth]
+      operationId: getAuthOptions
+      summary: Get the sign-in options, such as whether registration is open
+      security: []
+      responses:
+        '200':
+          description: The options.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthOptions'
+
   /api/auth/me:
     get:
       tags: [auth]
@@ -103,6 +166,10 @@ paths:
       tags: [problems]
       operationId: listProblems
       summary: List problems
+      description: Without a session, only visible problems are listed and every status is `NONE`.
+      security:
+        - {}
+        - sessionCookie: []
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -125,14 +192,18 @@ paths:
                 $ref: '#/components/schemas/ProblemPage'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /api/problems/{slug}:
     get:
       tags: [problems]
       operationId: getProblem
       summary: Get a problem with its statement and samples
+      description: Without a session, the status is `NONE`.
+      security:
+        - {}
+        - sessionCookie: []
       parameters:
         - name: slug
           in: path
@@ -146,8 +217,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Problem'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -156,6 +227,10 @@ paths:
       tags: [submissions]
       operationId: listSubmissions
       summary: List submissions, newest first
+      description: '`scope=mine` (the default) needs a session; `scope=all` also answers visitors.'
+      security:
+        - {}
+        - sessionCookie: []
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -166,6 +241,11 @@ paths:
         - name: problem
           in: query
           description: Only submissions to the problem with this slug.
+          schema:
+            type: string
+        - name: user
+          in: query
+          description: Only submissions by the user with this username (ignoring case).
           schema:
             type: string
         - name: verdict
@@ -182,7 +262,13 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: '`scope=mine` without a valid session.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [submissions]
       operationId: createSubmission
@@ -221,7 +307,10 @@ paths:
       tags: [submissions]
       operationId: getSubmission
       summary: Get one submission
-      description: '`sourceCode` and `compileOutput` are present only for the owner.'
+      description: '`sourceCode` and `compileOutput` are present only for the owner and for admins.'
+      security:
+        - {}
+        - sessionCookie: []
       parameters:
         - $ref: '#/components/parameters/SubmissionId'
       responses:
@@ -231,8 +320,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SubmissionDetail'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -257,8 +346,182 @@ paths:
                 type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /api/account/password:
+    post:
+      tags: [account]
+      operationId: changePassword
+      summary: Change the signed-in user's password
+      description: |
+        Needs the current password. On success the current session stays signed in and every other
+        session of the account ends. A wrong current password counts as a failed sign-in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/users/{username}:
+    get:
+      tags: [users]
+      operationId: getUserProfile
+      summary: Get a user's public profile
+      description: |
+        Only visible problems are counted. Disabled accounts are `404` except for admins.
+      security:
+        - {}
+        - sessionCookie: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: Matched ignoring case.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/users:
+    get:
+      tags: [admin]
+      operationId: listAdminUsers
+      summary: List accounts, newest first
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: q
+          in: query
+          description: Case-insensitive substring match on the username.
+          schema:
+            type: string
+            maxLength: 64
+        - name: role
+          in: query
+          schema:
+            $ref: '#/components/schemas/UserRole'
+        - name: enabled
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: A page of accounts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}:
+    patch:
+      tags: [admin]
+      operationId: updateAdminUser
+      summary: Change an account's role or enabled state
+      description: |
+        Any change ends the account's sessions. Admins cannot change their own account (`409`).
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: The updated account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/admin/users/{id}/password-reset:
+    post:
+      tags: [admin]
+      operationId: resetUserPassword
+      summary: Give an account a temporary password
+      description: |
+        The account must choose a new password at its next sign-in, and its sessions end. The temporary
+        password is returned only in this response. Admins cannot reset their own password (`409`).
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: The temporary password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordReset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/admin/audit:
+    get:
+      tags: [admin]
+      operationId: listAuditEntries
+      summary: List admin actions on accounts, newest first
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: A page of audit entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEntryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
 components:
   securitySchemes:
@@ -293,6 +556,13 @@ components:
       schema:
         type: integer
         format: int64
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
 
   responses:
     BadRequest:
@@ -308,7 +578,7 @@ components:
           schema:
             $ref: '#/components/schemas/ApiProblem'
     Forbidden:
-      description: Missing or invalid CSRF token, or not allowed.
+      description: Missing or invalid CSRF token, not allowed, or the account must change its password first.
       content:
         application/problem+json:
           schema:
@@ -319,11 +589,19 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ApiProblem'
+    Conflict:
+      description: The change is not allowed in the account's current state; `detail` says why.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
     TooManyRequests:
-      description: Too many submissions; retry after the given number of seconds.
+      description: |
+        Too many requests; retry after the given number of seconds. `detail` is a message that can be
+        shown to the user as is.
       headers:
         Retry-After:
-          description: Seconds to wait before submitting again.
+          description: Seconds to wait before trying again.
           schema:
             type: integer
       content:
@@ -341,7 +619,7 @@ components:
       enum: [CPP17]
     UserRole:
       type: string
-      enum: [STUDENT, ADMIN]
+      enum: [USER, ADMIN]
     ProblemUserStatus:
       type: string
       description: '`SOLVED`: at least one accepted submission. `ATTEMPTED`: submissions but none accepted.'
@@ -374,9 +652,43 @@ components:
           minLength: 1
           maxLength: 128
 
+    RegisterRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Za-z0-9._-]+$'
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    AuthOptions:
+      type: object
+      required: [registrationEnabled]
+      properties:
+        registrationEnabled:
+          type: boolean
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 128
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 128
+
     CurrentUser:
       type: object
-      required: [id, username, role]
+      required: [id, username, role, mustChangePassword]
       properties:
         id:
           type: integer
@@ -385,6 +697,149 @@ components:
           type: string
         role:
           $ref: '#/components/schemas/UserRole'
+        mustChangePassword:
+          type: boolean
+          description: An admin reset the password; nothing but changing it is allowed until then.
+
+    UserProfile:
+      type: object
+      required:
+        [id, username, role, joinedAt, solvedCount, attemptedCount, submissionCount, acceptedCount, solved]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        joinedAt:
+          type: string
+          format: date-time
+        solvedCount:
+          type: integer
+          format: int32
+        attemptedCount:
+          type: integer
+          format: int32
+          description: Problems with submissions but none accepted.
+        submissionCount:
+          type: integer
+          format: int64
+        acceptedCount:
+          type: integer
+          format: int64
+        solved:
+          type: array
+          description: Solved problems, most recently first solved first.
+          items:
+            $ref: '#/components/schemas/ProblemRef'
+
+    AdminUser:
+      type: object
+      required: [id, username, role, enabled, mustChangePassword, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        enabled:
+          type: boolean
+        mustChangePassword:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+          description: Absent if the account never signed in.
+
+    AdminUserPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    UpdateUserRequest:
+      type: object
+      minProperties: 1
+      properties:
+        role:
+          $ref: '#/components/schemas/UserRole'
+        enabled:
+          type: boolean
+
+    PasswordReset:
+      type: object
+      required: [temporaryPassword]
+      properties:
+        temporaryPassword:
+          type: string
+
+    AuditAction:
+      type: string
+      enum: [ROLE_CHANGED, DISABLED, ENABLED, PASSWORD_RESET]
+
+    AuditEntry:
+      type: object
+      required: [id, createdAt, actor, target, action]
+      properties:
+        id:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          $ref: '#/components/schemas/UserRef'
+        target:
+          $ref: '#/components/schemas/UserRef'
+        action:
+          $ref: '#/components/schemas/AuditAction'
+        fromRole:
+          $ref: '#/components/schemas/UserRole'
+        toRole:
+          $ref: '#/components/schemas/UserRole'
+
+    AuditEntryPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
 
     UserRef:
       type: object
@@ -599,10 +1054,10 @@ components:
             $ref: '#/components/schemas/TestResult'
         sourceCode:
           type: string
-          description: Present only for the owner.
+          description: Present only for the owner and for admins.
         compileOutput:
           type: string
-          description: Compiler output; present only for the owner and only when there is output.
+          description: Compiler output; present only for the owner and for admins, and only when there is output.
 
     SubmissionPage:
       type: object

@@ -16,7 +16,8 @@ public record OjProperties(
         @DefaultValue TestData testdata,
         @DefaultValue Judge judge,
         @DefaultValue RateLimit rateLimit,
-        @DefaultValue LoginThrottle loginThrottle) {
+        @DefaultValue LoginThrottle loginThrottle,
+        @DefaultValue Registration registration) {
 
     public boolean hasRole(Role role) {
         return roles.contains(role);
@@ -65,11 +66,30 @@ public record OjProperties(
         }
     }
 
+    /**
+     * Submission limits per user, plus {@code submissionsPerAddress} per client address within
+     * {@code addressWindow}, whichever accounts they come from.
+     */
     public record RateLimit(
             @DefaultValue("3") int submissions,
             @DefaultValue("10s") Duration window,
             @DefaultValue("2") int unfinished,
-            @DefaultValue("5s") Duration unfinishedRetryAfter) {}
+            @DefaultValue("5s") Duration unfinishedRetryAfter,
+            @DefaultValue("30") int submissionsPerAddress,
+            @DefaultValue("1m") Duration addressWindow) {}
 
-    public record LoginThrottle(@DefaultValue("5") int maxFailures, @DefaultValue("5m") Duration window) {}
+    /**
+     * Failed sign-ins within {@code window}: {@code maxFailures} per username and client address together, and
+     * {@code maxFailuresPerAddress} per client address for any usernames.
+     */
+    public record LoginThrottle(
+            @DefaultValue("5") int maxFailures,
+            @DefaultValue("50") int maxFailuresPerAddress,
+            @DefaultValue("5m") Duration window) {}
+
+    /** Self-registration, and how many accounts one client address may register within {@code window}. */
+    public record Registration(
+            @DefaultValue("true") boolean enabled,
+            @DefaultValue("5") int perAddress,
+            @DefaultValue("1h") Duration window) {}
 }

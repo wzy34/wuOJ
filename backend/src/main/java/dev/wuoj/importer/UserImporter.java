@@ -8,10 +8,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import dev.wuoj.common.domain.UserRole;
 import dev.wuoj.user.UserRepository;
+import dev.wuoj.user.Usernames;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -27,7 +27,6 @@ import tools.jackson.dataformat.csv.CsvSchema;
 @Service
 public class UserImporter {
 
-    static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9._-]{1,64}");
     private static final Set<String> REQUIRED = Set.of("username", "password", "role");
     private static final Set<String> KNOWN = Set.of("username", "password", "role", "enabled");
 
@@ -125,7 +124,7 @@ public class UserImporter {
         String enabled = values.getOrDefault("enabled", "").strip();
         String at = "line " + line + ": ";
 
-        if (!USERNAME.matcher(username).matches()) {
+        if (!Usernames.isValid(username)) {
             errors.add(at + "username '" + username + "' is invalid (1-64 letters, digits, '.', '_' or '-')");
         }
         if (password.isEmpty()) errors.add(at + "password is required");
@@ -134,7 +133,7 @@ public class UserImporter {
         try {
             parsedRole = UserRole.valueOf(role);
         } catch (IllegalArgumentException e) {
-            errors.add(at + "role '" + role + "' is invalid (STUDENT or ADMIN)");
+            errors.add(at + "role '" + role + "' is invalid (USER or ADMIN)");
         }
         if (!enabled.isEmpty() && !enabled.equalsIgnoreCase("true") && !enabled.equalsIgnoreCase("false")) {
             errors.add(at + "enabled must be true or false");

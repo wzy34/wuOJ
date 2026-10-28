@@ -20,8 +20,11 @@ describe('problem fixtures', () => {
 });
 
 describe('problems mock', () => {
-  it('requires a session', async () => {
-    expect((await apiGet('/api/problems')).status).toBe(401);
+  it('answers visitors without a status', async () => {
+    const page: ProblemPage = await (await apiGet('/api/problems?size=3')).json();
+    expect(page.items.map((p) => p.status)).toEqual(['NONE', 'NONE', 'NONE']);
+    const problem: Problem = await (await apiGet('/api/problems/a-plus-b')).json();
+    expect(problem.status).toBe('NONE');
   });
 
   it('pages through the list', async () => {

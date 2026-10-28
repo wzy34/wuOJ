@@ -2,31 +2,51 @@
 
 ## Purpose
 
-Provides the frame every student page lives in: startup, URL routing, navigation, light and dark themes, responsive layout, and consistent handling of missing pages and unexpected errors.
+Provides the frame every page lives in: startup, URL routing, navigation that depends on who is signed in, light and dark themes, responsive layout, and consistent handling of missing pages and unexpected errors.
 
 ## Requirements
 
 ### Requirement: Routes
-The app SHALL serve these routes: `/login`, `/problems`, `/problems/:slug`, `/submissions` and `/submissions/:id`. The root path `/` SHALL redirect to `/problems`. Any other path SHALL show a "page not found" screen with a link back to the problem list.
+The app SHALL serve these routes:
+- for everyone: `/login`, `/register`, `/problems`, `/problems/:slug`, `/submissions`, `/submissions/:id` and `/users/:username`;
+- for signed-in users: `/settings`;
+- for admins: `/admin/users` and `/admin/audit`.
+
+The root path `/` SHALL redirect to `/problems`, signed in or not. Any other path SHALL show a "page not found" screen with a link back to the problem list.
 
 #### Scenario: Root redirect
-- **WHEN** a signed-in student opens `/`
+- **WHEN** a visitor opens `/`
 - **THEN** the browser lands on `/problems`
 
 #### Scenario: Unknown path
-- **WHEN** a student opens `/does-not-exist`
+- **WHEN** anyone opens `/does-not-exist`
 - **THEN** a "page not found" screen is shown with a link to `/problems`
 
 #### Scenario: Deep link reload
-- **WHEN** a student reloads the browser on `/submissions/42`
+- **WHEN** a user reloads the browser on `/submissions/42`
 - **THEN** the same submission page is shown again
 
+#### Scenario: Admin page as a user
+- **WHEN** a signed-in user who is not an admin opens `/admin/users`
+- **THEN** a "page not found" screen is shown
+
 ### Requirement: Top navigation
-Every page except login SHALL show a top bar with the platform name, links to Problems and Submissions with the current section highlighted, a theme toggle, and a user menu showing the signed-in username with a "Sign out" action.
+Every page except login and register SHALL show a top bar with the platform name, links to Problems and Submissions with the current section highlighted, and a theme toggle.
+- For visitors it SHALL show "Sign in" and, while registration is open, "Register". Both SHALL return to the current page afterwards.
+- For signed-in users it SHALL show a user menu with the username, containing "Profile", "Settings" and "Sign out".
+- For admins it SHALL also show an "Admin" link to `/admin/users`.
 
 #### Scenario: Current section highlighted
-- **WHEN** a student is on `/submissions/42`
+- **WHEN** a user is on `/submissions/42`
 - **THEN** the Submissions link in the top bar is shown as active
+
+#### Scenario: Visitor top bar
+- **WHEN** a visitor opens `/problems` while registration is open
+- **THEN** the top bar shows "Sign in" and "Register" and no user menu
+
+#### Scenario: Admin top bar
+- **WHEN** an admin opens any page
+- **THEN** the top bar shows an "Admin" link and the user menu
 
 ### Requirement: Light and dark themes
 The app SHALL offer a light and a dark theme. Until the student chooses one, it SHALL follow the operating system's colour scheme and react to changes of it. A choice made with the theme toggle SHALL be remembered in that browser and applied before the first paint on the next visit. All components, including the code editor and rendered statements, SHALL use the active theme.

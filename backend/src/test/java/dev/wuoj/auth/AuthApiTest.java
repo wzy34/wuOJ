@@ -57,7 +57,8 @@ class AuthApiTest extends IntegrationTest {
         client.perform(login("student", "student"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("student"))
-                .andExpect(jsonPath("$.role").value("STUDENT"))
+                .andExpect(jsonPath("$.role").value("USER"))
+                .andExpect(jsonPath("$.mustChangePassword").value(false))
                 .andExpect(jsonPath("$.id").isNumber())
                 // HttpOnly and SameSite are checked over real HTTP in SessionLifetimeTest: MockMvc's response
                 // drops the attributes of cookies that Spring Session writes as raw headers.
@@ -65,6 +66,7 @@ class AuthApiTest extends IntegrationTest {
         client.perform(get("/api/auth/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("student"));
+        assertThat(users.findByUsername("student").orElseThrow().lastLoginAt()).isNotNull();
     }
 
     @Test
@@ -86,7 +88,7 @@ class AuthApiTest extends IntegrationTest {
     @Test
     void disabledAccountLooksLikeAWrongPassword() throws Exception {
         long id = users.findByUsername("bob").orElseThrow().id();
-        users.update(id, users.findById(id).orElseThrow().passwordHash(), UserRole.STUDENT, false);
+        users.update(id, users.findById(id).orElseThrow().passwordHash(), UserRole.USER, false);
         MvcResult disabled = session().start().perform(login("bob", "bob"))
                 .andExpect(status().isUnauthorized()).andReturn();
         MvcResult wrong = session().start().perform(login("alice", "wrong")).andReturn();
@@ -135,11 +137,32 @@ class AuthApiTest extends IntegrationTest {
     }
 
     @Test
+    void publicEndpointWhileSignedOut() throws Exception {
+        session().perform(get("/api/problems")).andExpect(status().isOk());
+    }
+
+    @Test
     void protectedEndpointWhileSignedOut() throws Exception {
-        session().perform(get("/api/problems"))
+        session().start().perform(submit())
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(header().doesNotExist("Location"));
+    }
+
+    @Test
+    void ownSubmissionsNeedASession() throws Exception {
+        session().perform(get("/api/submissions"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+        session().perform(get("/api/submissions").param("scope", "mine")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminEndpointsAreForAdmins() throws Exception {
+        session().perform(get("/api/admin/users")).andExpect(status().isUnauthorized());
+        signedIn("student").perform(get("/api/admin/users"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     @Test
@@ -180,11 +203,39 @@ class AuthApiTest extends IntegrationTest {
     }
 
     @Test
-    void throttlingIsPerUsername() throws Exception {
+    void otherUsersUnaffected() throws Exception {
         for (int i = 0; i < 5; i++) {
             session().start().perform(login("ALICE", "wrong"));
         }
         session().start().perform(login("alice", "alice")).andExpect(status().isTooManyRequests());
         session().start().perform(login("bob", "bob")).andExpect(status().isOk());
+    }
+
+    @Test
+    void otherAddressesUnaffected() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            session().start().perform(from("203.0.113.1", login("alice", "wrong")));
+        }
+        session().start().perform(from("203.0.113.1", login("alice", "alice"))).andExpect(status().isTooManyRequests());
+        session().start().perform(from("203.0.113.2", login("alice", "alice"))).andExpect(status().isOk());
+    }
+
+    @Test
+    void sprayingFromOneAddress() throws Exception {
+        for (int i = 0; i < 50; i++) {
+            session().start().perform(from("203.0.113.9", login("user" + i, "wrong")))
+                    .andExpect(status().isUnauthorized());
+        }
+        session().start().perform(from("203.0.113.9", login("bob", "bob")))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"));
+        session().start().perform(from("203.0.113.10", login("bob", "bob"))).andExpect(status().isOk());
+    }
+
+    private static MockHttpServletRequestBuilder from(String address, MockHttpServletRequestBuilder request) {
+        return request.with(r -> {
+            r.setRemoteAddr(address);
+            return r;
+        });
     }
 }

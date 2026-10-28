@@ -20,9 +20,28 @@ export function latency() {
   return delay(mockConfig.latencyMs);
 }
 
-/** The signed-in user, or a 401 response to return as-is. */
+/**
+ * Who the request is answered for: the signed-in user, `undefined` for a visitor, or a 403 to return
+ * as-is while the user must change their password (as the real server holds such accounts).
+ */
+export function viewer(): MockUser | undefined | Response {
+  const user = getSessionUser();
+  if (user?.mustChangePassword) {
+    return problemResponse(403, 'Forbidden', 'Change your password to continue.');
+  }
+  return user;
+}
+
+/** The signed-in user, or a 401 (or 403) response to return as-is. */
 export function requireUser(): MockUser | Response {
-  return getSessionUser() ?? problemResponse(401, 'Unauthorized', 'Sign in to continue.');
+  return viewer() ?? problemResponse(401, 'Unauthorized', 'Sign in to continue.');
+}
+
+/** The signed-in admin, or a 401/403 response to return as-is. */
+export function requireAdmin(): MockUser | Response {
+  const user = requireUser();
+  if (user instanceof Response || user.role === 'ADMIN') return user;
+  return problemResponse(403, 'Forbidden', 'You are not allowed to do this.');
 }
 
 /** A 403 response when the CSRF header does not match the issued token, else undefined. */

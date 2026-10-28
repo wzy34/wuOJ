@@ -1,0 +1,15 @@
+.page {
+  max-width: 560px;
+}
+
+.title {
+  margin-top: 0;
+}
+
+.alert {
+  margin-bottom: 16px;
+}
+
+.note {
+  margin: 16px 0 0;
+}

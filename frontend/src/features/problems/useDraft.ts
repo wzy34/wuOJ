@@ -4,17 +4,42 @@ import { STARTER_TEMPLATE } from './starterTemplate';
 
 const SAVE_DELAY_MS = 500;
 
-export function draftKey(userId: number, problemId: number): string {
-  return `oj:draft:v1:${userId}:${problemId}:CPP17`;
+/** Whose draft: a user's id, or the visitor's drafts in this browser. */
+export type DraftOwner = number | 'guest';
+
+const PREFIX = 'oj:draft:v1:';
+
+export function draftKey(owner: DraftOwner, problemId: number): string {
+  return `${PREFIX}${owner}:${problemId}:CPP17`;
 }
 
 /**
- * Editor content saved in this browser per user and problem, written shortly after typing
- * pauses and on leaving the page. Storage failures are ignored so editing never breaks.
+ * After signing in or registering: the visitor's drafts become the user's, for every problem the
+ * user has no draft of their own for. Guest drafts are removed either way.
+ */
+export function adoptGuestDrafts(userId: number): void {
+  const guestPrefix = `${PREFIX}guest:`;
+  let keys: string[];
+  try {
+    keys = Object.keys(localStorage).filter((key) => key.startsWith(guestPrefix));
+  } catch {
+    return;
+  }
+  for (const guestKey of keys) {
+    const userKey = PREFIX + userId + ':' + guestKey.slice(guestPrefix.length);
+    const code = readStorage(guestKey);
+    if (code !== null && readStorage(userKey) === null) writeStorage(userKey, code);
+    removeStorage(guestKey);
+  }
+}
+
+/**
+ * Editor content saved in this browser per user (or guest) and problem, written shortly after
+ * typing pauses and on leaving the page. Storage failures are ignored so editing never breaks.
  * Mount with `key={draftKey(...)}` so switching problems starts from that problem's draft.
  */
-export function useDraft(userId: number, problemId: number) {
-  const key = draftKey(userId, problemId);
+export function useDraft(owner: DraftOwner, problemId: number) {
+  const key = draftKey(owner, problemId);
   const [code, setCode] = useState(() => readStorage(key) ?? STARTER_TEMPLATE);
   const latest = useRef({ key, code, dirty: false });
 

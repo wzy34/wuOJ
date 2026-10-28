@@ -1,7 +1,7 @@
 # wuOJ web app
 
-The student-facing frontend of wuOJ, an online judge for classrooms and clubs: sign in, browse
-problems, write C++ in the browser, submit, and watch the verdict arrive live.
+The web app of wuOJ, a public online judge: browse problems, write C++ in the browser, register
+to submit and watch the verdict arrive live; admins manage accounts.
 
 Built with Vite, React 18, TypeScript and [Arco Design](https://arco.design/react). The API
 contract lives in [`../api/openapi.yaml`](../api/openapi.yaml); the client code is generated from
@@ -20,7 +20,8 @@ pnpm install
 pnpm dev:mock        # http://localhost:5173, no backend needed
 ```
 
-Sign in with **`student` / `student`** (also `alice` / `alice` and `bob` / `bob`).
+Browse as a visitor, register (accounts made in mock mode last until the page reloads), or sign in
+with **`student` / `student`** (also `alice` / `alice`, `bob` / `bob`, and the admin `admin` / `admin`).
 
 > If `pnpm install` fails with `No matching version found` while using a registry mirror (such as
 > npmmirror), the mirror has not synced a new release yet. Retry with
@@ -32,19 +33,19 @@ installed version.
 
 ## Scripts
 
-| Script                              | What it does                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------- |
-| `pnpm dev`                          | Dev server; `/api` is proxied to the backend at `http://localhost:8080`         |
-| `pnpm dev:mock`                     | Dev server with the API mocked in the browser                                   |
-| `pnpm build` / `pnpm preview`       | Production build into `dist/` / serve it locally                                |
-| `pnpm test`                         | Unit and component tests (Vitest + Testing Library, API mocked with MSW)        |
-| `pnpm test:e2e`                     | End-to-end smoke test in Chromium; starts its own mock-mode server on port 5180 |
-| `pnpm test:e2e:backend`             | The same test against a running backend (see `playwright.backend.config.ts`)    |
-| `pnpm lint` / `pnpm typecheck`      | ESLint / TypeScript checks                                                      |
-| `pnpm format` / `pnpm format:check` | Prettier                                                                        |
-| `pnpm lint:api`                     | Validate `../api/openapi.yaml`                                                  |
-| `pnpm gen:api`                      | Regenerate the API client from the contract                                     |
-| `pnpm check:api`                    | Fail if the generated client is out of date with the contract                   |
+| Script                              | What it does                                                                  |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| `pnpm dev`                          | Dev server; `/api` is proxied to the backend at `http://localhost:8080`       |
+| `pnpm dev:mock`                     | Dev server with the API mocked in the browser                                 |
+| `pnpm build` / `pnpm preview`       | Production build into `dist/` / serve it locally                              |
+| `pnpm test`                         | Unit and component tests (Vitest + Testing Library, API mocked with MSW)      |
+| `pnpm test:e2e`                     | End-to-end tests in Chromium; start their own mock-mode server on port 5180   |
+| `pnpm test:e2e:backend`             | The same tests against a running backend (see `playwright.backend.config.ts`) |
+| `pnpm lint` / `pnpm typecheck`      | ESLint / TypeScript checks                                                    |
+| `pnpm format` / `pnpm format:check` | Prettier                                                                      |
+| `pnpm lint:api`                     | Validate `../api/openapi.yaml`                                                |
+| `pnpm gen:api`                      | Regenerate the API client from the contract                                   |
+| `pnpm check:api`                    | Fail if the generated client is out of date with the contract                 |
 
 Before the first `pnpm test:e2e`, install the browser once: `pnpm exec playwright install chromium`.
 
@@ -98,7 +99,7 @@ src/
 ├── stores/             saved preferences (theme, editor font size)
 ├── mocks/              mock backend: fixtures, handlers, simulated judge
 └── test/               test setup, polyfills, Monaco stub, render helpers
-e2e/                    Playwright smoke test
+e2e/                    Playwright end-to-end tests
 ```
 
 ## Writing problem statements

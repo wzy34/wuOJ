@@ -84,4 +84,26 @@ describe('SubmissionListPage', () => {
       { timeout: 5000 },
     );
   }, 8_000);
+
+  it('shows visitors all submissions without the mine/all switch', async () => {
+    const { router } = renderRoute('/submissions');
+    await waitFor(() => expect(idLinks()).toEqual(['#6', '#5', '#4', '#3', '#2', '#1']));
+    expect(router.state.location.pathname).toBe('/submissions');
+    expect(screen.queryByText('All users')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'alice' })[0]).toHaveAttribute(
+      'href',
+      '/users/alice',
+    );
+  });
+
+  it('filters by a user from the URL with a removable tag', async () => {
+    const { router } = renderRoute('/submissions?scope=all&user=alice');
+    await waitFor(() => expect(idLinks()).toEqual(['#6', '#3']));
+    const tag = screen.getByLabelText('User filter');
+    expect(tag).toHaveTextContent('User: alice');
+
+    await userEvent.click(within(tag).getByRole('button'));
+    await waitFor(() => expect(idLinks()).toHaveLength(6));
+    expect(router.state.location.search).toBe('?scope=all');
+  });
 });

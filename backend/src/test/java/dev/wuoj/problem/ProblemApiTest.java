@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 class ProblemApiTest extends IntegrationTest {
 
@@ -154,6 +156,20 @@ class ProblemApiTest extends IntegrationTest {
     }
 
     @Test
+    void visitorStatus() throws Exception {
+        long solved = fixtures.problem("1001", "solved", "Solved", Difficulty.EASY, true);
+        fixtures.problem("1002", "draft", "Draft", Difficulty.EASY, false);
+        statuses.markSolved(alice, solved);
+        session().perform(get("/api/problems"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].slug").value(contains("solved")))
+                .andExpect(jsonPath("$.items[*].status").value(contains("NONE")));
+        session().perform(get("/api/problems/solved"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("NONE"));
+    }
+
+    @Test
     void statementAndSamples() throws Exception {
         String statement = "Given $a$ and $b$, print $a + b$.\n\n## Input\n\nTwo integers.\n";
         long id = fixtures.problem(new ProblemData("1001", "a-plus-b", "A + B", Difficulty.EASY, 2000, 128,
@@ -179,6 +195,8 @@ class ProblemApiTest extends IntegrationTest {
     void hiddenProblemIsNotFoundForStudentsAndPreviewableByAdmins() throws Exception {
         fixtures.problem("1002", "draft", "Draft", Difficulty.EASY, false);
         student.perform(get("/api/problems/draft")).andExpect(status().isNotFound());
+        session().perform(get("/api/problems/draft")).andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
         signedIn("admin").perform(get("/api/problems/draft")).andExpect(status().isOk());
     }
 

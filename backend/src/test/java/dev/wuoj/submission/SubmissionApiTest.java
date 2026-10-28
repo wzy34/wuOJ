@@ -7,6 +7,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -173,8 +174,8 @@ class SubmissionApiTest extends IntegrationTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Retry-After", "5"));
         // The unfinished limit does not use up the window: once one finishes, the third submission is accepted.
-        finish(submissions.list(new dev.wuoj.common.domain.Viewer(alice, UserRole.STUDENT), true, null, null,
-                new dev.wuoj.common.web.PageRequest(1, 1)).items().getFirst().id(), "AC");
+        finish(submissions.list(new dev.wuoj.common.domain.Viewer(alice, UserRole.USER), true, null, null,
+                null, new dev.wuoj.common.web.PageRequest(1, 1)).items().getFirst().id(), "AC");
         aliceSession.perform(submit("int main(){}")).andExpect(status().isCreated());
     }
 
@@ -184,6 +185,42 @@ class SubmissionApiTest extends IntegrationTest {
         aliceSession.perform(submit("int main(){}"));
         aliceSession.perform(submit("int main(){}")).andExpect(status().isTooManyRequests());
         signedIn("bob").perform(submit("int main(){}")).andExpect(status().isCreated());
+    }
+
+    @Test
+    void manyAccountsFromOneAddress() throws Exception {
+        for (int a = 0; a < 10; a++) {
+            ApiSession account = signedIn("user" + a, true);
+            for (int i = 0; i < 3; i++) {
+                account.perform(fromAddress("198.51.100.5", submit("int main(){}"))).andExpect(status().isCreated());
+                finishAll();
+            }
+        }
+        ApiSession eleventh = signedIn("user10", true);
+        MvcResult limited = eleventh.perform(fromAddress("198.51.100.5", submit("int main(){}")))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.startsWith(
+                        "Too many submissions from your network.")))
+                .andReturn();
+        assertThat(Long.parseLong(limited.getResponse().getHeader("Retry-After"))).isBetween(1L, 60L);
+        assertThat(countSubmissions()).isEqualTo(30);
+        // The refused submission did not use up the account's own limit.
+        for (int i = 0; i < 3; i++) {
+            eleventh.perform(fromAddress("198.51.100.6", submit("int main(){}"))).andExpect(status().isCreated());
+            finishAll();
+        }
+    }
+
+    private ApiSession signedIn(String username, boolean create) throws Exception {
+        if (create) fixtures.user(username);
+        return signedIn(username);
+    }
+
+    private static MockHttpServletRequestBuilder fromAddress(String address, MockHttpServletRequestBuilder request) {
+        return request.with(r -> {
+            r.setRemoteAddr(address);
+            return r;
+        });
     }
 
     @Test
@@ -264,6 +301,26 @@ class SubmissionApiTest extends IntegrationTest {
                 .andExpect(jsonPath("$.items[*].id").value(contains((int) visible, (int) onHidden)));
     }
 
+    @Test
+    void visitorSeesAllSubmissionsToVisibleProblems() throws Exception {
+        stored(alice, hidden, "AC");
+        long visible = stored(bob, aPlusB, "AC");
+        session().perform(get("/api/submissions").param("scope", "all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id").value(contains((int) visible)));
+    }
+
+    @Test
+    void userFilter() throws Exception {
+        long mine = stored(alice, aPlusB, "AC");
+        stored(bob, aPlusB, "AC");
+        session().perform(get("/api/submissions").param("scope", "all").param("user", "Alice"))
+                .andExpect(jsonPath("$.items[*].id").value(contains((int) mine)));
+        session().perform(get("/api/submissions").param("scope", "all").param("user", "nobody"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(0));
+    }
+
     // --- Detail --------------------------------------------------------------------------------------------------
 
     private long compileError(long user) {
@@ -293,6 +350,33 @@ class SubmissionApiTest extends IntegrationTest {
                 .andExpect(jsonPath("$.verdict").value("CE"))
                 .andExpect(jsonPath("$.sourceCode").doesNotExist())
                 .andExpect(jsonPath("$.compileOutput").doesNotExist());
+    }
+
+    @Test
+    void visitorsDoNot() throws Exception {
+        long id = compileError(alice);
+        session().perform(get("/api/submissions/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verdict").value("CE"))
+                .andExpect(jsonPath("$.sourceCode").doesNotExist())
+                .andExpect(jsonPath("$.compileOutput").doesNotExist());
+    }
+
+    @Test
+    void adminSeesCode() throws Exception {
+        long id = compileError(alice);
+        signedIn("admin").perform(get("/api/submissions/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceCode").value("int main() { return 0 }"))
+                .andExpect(jsonPath("$.compileOutput").value("main.cpp:1:24: error: expected ';'"));
+    }
+
+    @Test
+    void visitorsCannotStreamEvents() throws Exception {
+        long id = stored(alice, aPlusB, null);
+        session().perform(get("/api/submissions/" + id + "/events").accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     @Test

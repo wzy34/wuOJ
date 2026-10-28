@@ -8,6 +8,7 @@ import static org.springframework.http.HttpMethod.POST;
 import java.util.List;
 
 import dev.wuoj.common.web.ProblemResponses;
+import dev.wuoj.user.UserRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +20,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy;
@@ -33,7 +35,8 @@ import org.springframework.security.web.savedrequest.NullRequestCache;
 /**
  * Cookie sessions (stored in Redis by Spring Session) with SPA-style CSRF: the {@code XSRF-TOKEN} cookie is readable
  * by the web app, which echoes it in {@code X-XSRF-TOKEN}. Sign-in is a JSON endpoint ({@link AuthController}), not
- * form login, and every failure is a problem-details body rather than a redirect.
+ * form login, and every failure is a problem-details body rather than a redirect. Reading problems, everyone's
+ * submissions and profiles needs no session; every session is checked against its account by {@link AccountFilter}.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -41,15 +44,24 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain api(HttpSecurity http, CookieCsrfTokenRepository csrfTokens,
-            SecurityContextRepository securityContexts, ProblemResponses problems) throws Exception {
+            SecurityContextRepository securityContexts, ProblemResponses problems, UserRepository users)
+            throws Exception {
         http.securityMatcher("/api/**", "/actuator/**")
                 .csrf(csrf -> csrf.spa().csrfTokenRepository(csrfTokens))
                 .securityContext(context -> context.securityContextRepository(securityContexts))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(ASYNC, ERROR).permitAll()
-                        .requestMatchers(POST, "/api/auth/login", "/api/auth/logout").permitAll()
-                        .requestMatchers(GET, "/api/auth/me", "/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(POST, "/api/auth/login", "/api/auth/logout", "/api/auth/register")
+                        .permitAll()
+                        .requestMatchers(GET, "/api/auth/me", "/api/auth/options", "/actuator/health",
+                                "/actuator/health/**").permitAll()
+                        .requestMatchers(GET, "/api/submissions/*/events").authenticated()
+                        // scope=mine needs a session too; the submission controller enforces it.
+                        .requestMatchers(GET, "/api/problems", "/api/problems/*", "/api/submissions",
+                                "/api/submissions/*", "/api/users/*").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
+                .addFilterBefore(new AccountFilter(users, problems), AnonymousAuthenticationFilter.class)
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, e) -> problems.write(request, response,
                                 HttpStatus.UNAUTHORIZED, "Sign in to continue."))

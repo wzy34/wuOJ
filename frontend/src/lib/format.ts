@@ -8,6 +8,11 @@ export function formatDateTime(iso: string): string {
   return dayjs(iso).format('YYYY-MM-DD HH:mm:ss');
 }
 
+/** Local date, e.g. "2026-10-24". */
+export function formatDate(iso: string): string {
+  return dayjs(iso).format('YYYY-MM-DD');
+}
+
 /** e.g. "3 minutes ago". */
 export function formatFromNow(iso: string): string {
   return dayjs(iso).fromNow();

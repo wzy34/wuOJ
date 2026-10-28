@@ -39,10 +39,12 @@ public class SubmissionService {
 
     /**
      * Stores a submission and queues it for judging once the transaction commits. Checked in this order: the problem
-     * is visible (404), the user has too many unfinished submissions (429), the user submitted too often (429).
+     * is visible (404), the user has too many unfinished submissions (429), the client address submitted too often
+     * (429), the user submitted too often (429). A refused submission counts towards none of the limits.
      */
     @Transactional
-    public SubmissionDetail create(Viewer viewer, long problemId, Language language, String sourceCode) {
+    public SubmissionDetail create(Viewer viewer, String address, long problemId, Language language,
+            String sourceCode) {
         ProblemRow problem = problems.findById(viewer, problemId)
                 .orElseThrow(() -> new NotFoundException("Problem not found."));
 
@@ -53,13 +55,21 @@ public class SubmissionService {
             throw new RateLimitedException(seconds, "You already have " + unfinished
                     + " submissions being judged. Try again in " + seconds + " seconds.");
         }
-        Duration wait = limiter.tryAcquire("oj:rl:submit:" + viewer.userId(), limits.submissions(), limits.window());
+        String addressKey = "oj:rl:submit-ip:" + address;
+        Duration wait = limiter.check(addressKey, limits.submissionsPerAddress(), limits.addressWindow());
+        if (!wait.isZero()) {
+            long seconds = SlidingWindowLimiter.seconds(wait);
+            throw new RateLimitedException(seconds,
+                    "Too many submissions from your network. Try again in " + seconds + " seconds.");
+        }
+        wait = limiter.tryAcquire("oj:rl:submit:" + viewer.userId(), limits.submissions(), limits.window());
         if (!wait.isZero()) {
             long seconds = SlidingWindowLimiter.seconds(wait);
             throw new RateLimitedException(seconds, "Too many submissions. Try again in " + seconds + " seconds.");
         }
 
         long id = submissions.insert(viewer.userId(), problem.id(), language, sourceCode, problem.testdataVersion());
+        limiter.record(addressKey, limits.addressWindow());
         statuses.markAttempted(viewer.userId(), problem.id());
         jobs.publishAfterCommit(id);
         return detail(viewer, id);
@@ -68,6 +78,6 @@ public class SubmissionService {
     public SubmissionDetail detail(Viewer viewer, long id) {
         SubmissionRow row = submissions.find(viewer, id)
                 .orElseThrow(() -> new NotFoundException("Submission not found."));
-        return SubmissionDetail.of(row, submissions.testResults(id), row.userId() == viewer.userId());
+        return SubmissionDetail.of(row, submissions.testResults(id), viewer.readsSourceOf(row.userId()));
     }
 }

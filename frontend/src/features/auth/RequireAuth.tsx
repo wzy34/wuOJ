@@ -1,23 +1,21 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { FullPageSpinner, PageError } from '@/components/PageState';
+import { NotFoundPage } from '@/app/NotFoundPage';
 import { loginPath } from './safeRedirect';
 import { useCurrentUser } from './useCurrentUser';
 
-/** Layout route that only renders its children for a signed-in student. */
+/** Layout route for pages that need a signed-in user; visitors are sent to sign in first. */
 export function RequireAuth() {
   const location = useLocation();
-  const { user, isPending, isSignedOut, refetch } = useCurrentUser();
+  const { user } = useCurrentUser();
+  if (!user) return <Navigate to={loginPath(location.pathname + location.search)} replace />;
+  return <Outlet />;
+}
 
-  if (user) return <Outlet />;
-  if (isPending) return <FullPageSpinner />;
-  if (isSignedOut) {
-    return <Navigate to={loginPath(location.pathname + location.search)} replace />;
-  }
-  return (
-    <PageError
-      title="Cannot reach wuOJ"
-      description="Your session could not be checked."
-      onRetry={() => void refetch()}
-    />
-  );
+/** Layout route for admin pages: visitors sign in first, other users get "page not found". */
+export function RequireAdmin() {
+  const location = useLocation();
+  const { user, isAdmin } = useCurrentUser();
+  if (!user) return <Navigate to={loginPath(location.pathname + location.search)} replace />;
+  if (!isAdmin) return <NotFoundPage />;
+  return <Outlet />;
 }

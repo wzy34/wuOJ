@@ -18,7 +18,7 @@ public class AccountUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) {
         return users.findByUsername(username)
-                .map(u -> new AuthUser(u.id(), u.username(), u.passwordHash(), u.role(), u.enabled()))
+                .map(AuthUser::withPassword)
                 .orElseThrow(() -> new UsernameNotFoundException("Unknown user"));
     }
 }

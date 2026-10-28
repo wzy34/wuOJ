@@ -42,10 +42,15 @@ class RepositoryTest extends IntegrationTest {
         assertThat(found.role()).isEqualTo(UserRole.ADMIN);
         assertThat(found.enabled()).isFalse();
 
-        users.update(id, "{noop}new", UserRole.STUDENT, true);
+        assertThat(found.sessionEpoch()).isZero();
+        assertThat(found.mustChangePassword()).isFalse();
+        assertThat(found.createdAt()).isNotNull();
+        assertThat(found.lastLoginAt()).isNull();
+
+        users.update(id, "{noop}new", UserRole.USER, true);
         assertThat(users.findById(id).orElseThrow())
-                .extracting("passwordHash", "role", "enabled")
-                .containsExactly("{noop}new", UserRole.STUDENT, true);
+                .extracting("passwordHash", "role", "enabled", "sessionEpoch")
+                .containsExactly("{noop}new", UserRole.USER, true, 1);
     }
 
     @Test
@@ -55,16 +60,31 @@ class RepositoryTest extends IntegrationTest {
         fixtures.problem("999", "a", "A", Difficulty.EASY, true);
         fixtures.problem("1000", "b", "B", Difficulty.MEDIUM, true);
 
-        var page = problems.list(new Viewer(user, UserRole.STUDENT), null, null, new PageRequest(1, 20));
+        var page = problems.list(new Viewer(user, UserRole.USER), null, null, new PageRequest(1, 20));
         assertThat(page.items()).extracting(ProblemRow::displayId).containsExactly("999", "1000", "1001");
         assertThat(page.totalItems()).isEqualTo(3);
+    }
+
+    @Test
+    void visitorsSeeVisibleProblemsWithoutStatus() {
+        long user = fixtures.user("student");
+        long solved = fixtures.problem("1001", "a", "A", Difficulty.EASY, true);
+        fixtures.problem("1002", "hidden", "Hidden", Difficulty.EASY, false);
+        statuses.markAttempted(user, solved);
+
+        var page = problems.list(Viewer.visitor(), null, null, new PageRequest(1, 20));
+        assertThat(page.items()).extracting(ProblemRow::slug).containsExactly("a");
+        assertThat(page.items()).extracting(ProblemRow::status).containsExactly(ProblemUserStatus.NONE);
+        assertThat(problems.findBySlug(Viewer.visitor(), "hidden")).isEmpty();
+        assertThat(problems.findById(Viewer.visitor(), solved).orElseThrow().status())
+                .isEqualTo(ProblemUserStatus.NONE);
     }
 
     @Test
     void problemRoundTripWithSamplesAndStatus() {
         long user = fixtures.user("student");
         long id = fixtures.problem("1001", "a-plus-b", "A + B", Difficulty.EASY, true);
-        Viewer viewer = new Viewer(user, UserRole.STUDENT);
+        Viewer viewer = new Viewer(user, UserRole.USER);
 
         ProblemRow row = problems.findBySlug(viewer, "a-plus-b").orElseThrow();
         assertThat(row.id()).isEqualTo(id);
@@ -84,7 +104,7 @@ class RepositoryTest extends IntegrationTest {
         long problem = fixtures.problem("1001", "a-plus-b", "A + B", Difficulty.EASY, true);
         long id = submissions.insert(user, problem, Language.CPP17, "int main(){}", Fixtures.VERSION);
 
-        var row = submissions.find(new Viewer(user, UserRole.STUDENT), id).orElseThrow();
+        var row = submissions.find(new Viewer(user, UserRole.USER), id).orElseThrow();
         assertThat(row.status()).isEqualTo(SubmissionStatus.PENDING);
         assertThat(row.sourceCode()).isEqualTo("int main(){}");
         assertThat(row.problemSlug()).isEqualTo("a-plus-b");
@@ -92,7 +112,8 @@ class RepositoryTest extends IntegrationTest {
         assertThat(submissions.testResults(id)).isEmpty();
         assertThat(submissions.countUnfinished(user)).isEqualTo(1);
 
-        var listed = submissions.list(new Viewer(user, UserRole.STUDENT), true, null, null, new PageRequest(1, 20));
+        var listed = submissions.list(new Viewer(user, UserRole.USER), true, null, null, null,
+                new PageRequest(1, 20));
         assertThat(listed.items()).singleElement().satisfies(s -> assertThat(s.sourceCode()).isNull());
     }
 }

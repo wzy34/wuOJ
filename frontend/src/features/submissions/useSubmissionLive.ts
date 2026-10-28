@@ -33,12 +33,16 @@ export function refreshAfterVerdict(queryClient: QueryClient, id: number): void 
 /**
  * A submission that updates itself until judged: status events arrive over SSE and are merged
  * into the cached detail. If the stream cannot be opened or drops, it falls back to fetching
- * every 2 seconds. Both stop once the verdict is final or the component unmounts.
+ * every 2 seconds. Both stop once the verdict is final or the component unmounts. The stream
+ * needs a session, so with `live: false` (visitors) it only polls.
  */
-export function useSubmissionLive(id: number | undefined) {
+export function useSubmissionLive(
+  id: number | undefined,
+  { live = true }: { live?: boolean } = {},
+) {
   const queryClient = useQueryClient();
   const [streamFailedFor, setStreamFailedFor] = useState<number>();
-  const polling = id !== undefined && streamFailedFor === id;
+  const polling = id !== undefined && (!live || streamFailedFor === id);
 
   const query = useGetSubmission(id ?? 0, {
     query: {

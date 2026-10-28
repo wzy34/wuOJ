@@ -2,15 +2,17 @@ import { http, HttpResponse } from 'msw';
 import type { Problem, ProblemSummary, ProblemUserStatus } from '@/api/generated/model';
 import { db, problems, type MockUser } from '../db';
 import type { MockProblem } from '../fixtures/problems';
-import { latency, oneOf, paginate, parsePaging, problemResponse, requireUser } from './util';
+import { latency, oneOf, paginate, parsePaging, problemResponse, viewer } from './util';
 
-export function problemStatus(user: MockUser, problemId: number): ProblemUserStatus {
+/** Visitors have no status. */
+export function problemStatus(user: MockUser | undefined, problemId: number): ProblemUserStatus {
+  if (!user) return 'NONE';
   const mine = db.submissions.filter((s) => s.user.id === user.id && s.problem.id === problemId);
   if (mine.some((s) => s.verdict === 'AC')) return 'SOLVED';
   return mine.length > 0 ? 'ATTEMPTED' : 'NONE';
 }
 
-function toProblem(problem: MockProblem, user: MockUser): Problem {
+function toProblem(problem: MockProblem, user: MockUser | undefined): Problem {
   const { testCount: _testCount, ...rest } = problem;
   return { ...rest, status: problemStatus(user, problem.id) };
 }
@@ -18,7 +20,7 @@ function toProblem(problem: MockProblem, user: MockUser): Problem {
 export const problemHandlers = [
   http.get('/api/problems', async ({ request }) => {
     await latency();
-    const user = requireUser();
+    const user = viewer();
     if (user instanceof Response) return user;
 
     const url = new URL(request.url);
@@ -55,7 +57,7 @@ export const problemHandlers = [
 
   http.get('/api/problems/:slug', async ({ params }) => {
     await latency();
-    const user = requireUser();
+    const user = viewer();
     if (user instanceof Response) return user;
 
     const problem = problems.find((p) => p.slug === params.slug);

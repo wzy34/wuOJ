@@ -34,9 +34,9 @@ public final class SubmissionDtos {
             Instant createdAt, @Nullable Integer currentTest, @Nullable Integer totalTests,
             List<TestResult> testResults, @Nullable String sourceCode, @Nullable String compileOutput) {
 
-        /** Source code and compiler output only for the owner; compiler output only if there is any. */
-        public static SubmissionDetail of(SubmissionRow row, List<TestResultRow> results, boolean owner) {
-            String compileOutput = owner && row.compileOutput() != null && !row.compileOutput().isEmpty()
+        /** Source code and compiler output only if the viewer may read them; compiler output only if there is any. */
+        public static SubmissionDetail of(SubmissionRow row, List<TestResultRow> results, boolean withSource) {
+            String compileOutput = withSource && row.compileOutput() != null && !row.compileOutput().isEmpty()
                     ? row.compileOutput()
                     : null;
             return new SubmissionDetail(row.id(), userRef(row), problemRef(row), row.language(), row.status(),
@@ -45,7 +45,7 @@ public final class SubmissionDtos {
                     results.stream()
                             .map(r -> new TestResult(r.testNumber(), r.verdict(), r.timeMs(), r.memoryKb()))
                             .toList(),
-                    owner ? row.sourceCode() : null, compileOutput);
+                    withSource ? row.sourceCode() : null, compileOutput);
         }
     }
 

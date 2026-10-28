@@ -91,4 +91,13 @@ describe('ProblemListPage', () => {
     expect(router.state.location.search).toBe('?q=warm&page=2');
     expect(screen.getByRole('textbox', { name: 'Search problems by title' })).toHaveValue('warm');
   });
+
+  it('shows visitors the list without a status column', async () => {
+    const { router } = renderRoute('/problems');
+    await screen.findByRole('link', { name: 'A + B' });
+    expect(router.state.location.pathname).toBe('/problems');
+    expect(screen.queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Solved' })).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Difficulty' })).toBeInTheDocument();
+  });
 });

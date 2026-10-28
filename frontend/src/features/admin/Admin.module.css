@@ -1,0 +1,47 @@
+.heading {
+  margin-bottom: 8px;
+}
+
+.title {
+  margin: 0 0 8px !important;
+}
+
+.tabs :global(.arco-tabs-content) {
+  display: none;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.search {
+  width: 240px;
+}
+
+.filter {
+  width: 160px;
+}
+
+.password {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  font-family: var(--code-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 18px;
+  letter-spacing: 1px;
+  background: var(--color-fill-2);
+  border-radius: 4px;
+}
+
+@media (max-width: 767px) {
+  .search,
+  .filter {
+    width: 100%;
+  }
+}

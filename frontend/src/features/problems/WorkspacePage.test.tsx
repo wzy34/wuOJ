@@ -259,4 +259,45 @@ describe('my submissions tab', () => {
     expect(links.map((link) => link.textContent)).toEqual(['#7', '#2', '#1']);
     expect(links[0]).toHaveAttribute('href', '/submissions/7');
   });
+
+  it('lets visitors write code but asks them to sign in to submit', async () => {
+    const posts = countSubmissionPosts();
+    renderRoute('/problems/a-plus-b');
+    await setCode('int main() {}');
+
+    expect(await screen.findByRole('button', { name: 'Sign in to submit' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'My submissions' })).not.toBeInTheDocument();
+    fireEvent.keyDown(await editor(), { key: 'Enter', ctrlKey: true });
+    expect(posts).toHaveLength(0);
+    server.events.removeAllListeners();
+  });
+
+  it('brings the visitor back to the problem with their code after signing in', async () => {
+    const { router } = renderRoute('/problems/a-plus-b');
+    await setCode('int main() { /* as a visitor */ }');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign in to submit' }));
+    expect(router.state.location.search).toBe('?redirect=%2Fproblems%2Fa-plus-b');
+
+    await userEvent.type(await screen.findByLabelText('Username'), 'alice');
+    await userEvent.type(screen.getByLabelText('Password'), 'alice');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByRole('button', { name: 'Submit' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/problems/a-plus-b');
+    expect(((await editor()) as HTMLTextAreaElement).value).toBe(
+      'int main() { /* as a visitor */ }',
+    );
+  });
+
+  it("keeps the user's own draft over a guest draft", async () => {
+    localStorage.setItem(draftKey('guest', 1), 'guest code');
+    localStorage.setItem(draftKey(2, 1), "alice's code");
+    renderRoute('/login?redirect=%2Fproblems%2Fa-plus-b');
+    await userEvent.type(await screen.findByLabelText('Username'), 'alice');
+    await userEvent.type(screen.getByLabelText('Password'), 'alice');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('button', { name: 'Submit' })).toBeInTheDocument();
+    expect(((await editor()) as HTMLTextAreaElement).value).toBe("alice's code");
+  });
 });
