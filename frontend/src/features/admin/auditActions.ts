@@ -14,5 +14,13 @@ export function describeAction(entry: AuditEntry): string {
       return 'Enabled the account';
     case 'PASSWORD_RESET':
       return 'Reset the password';
+    case 'PROBLEM_CREATED':
+      return 'Created the problem';
+    case 'PROBLEM_UPDATED':
+      return 'Edited the problem';
+    case 'TESTS_UPDATED':
+      return entry.fromTestCount !== undefined && entry.toTestCount !== undefined
+        ? `Saved tests (${entry.fromTestCount} → ${entry.toTestCount})`
+        : 'Saved tests';
   }
 }

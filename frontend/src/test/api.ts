@@ -25,6 +25,27 @@ export async function apiPatch(path: string, body: unknown): Promise<Response> {
   return apiPost(path, body, { method: 'PATCH' });
 }
 
+export async function apiPut(path: string, body: unknown): Promise<Response> {
+  return apiPost(path, body, { method: 'PUT' });
+}
+
+/** A multipart POST, as the generated client sends one: JSON fields as text, files as `files`. */
+export async function apiForm(
+  path: string,
+  fields: Record<string, unknown>,
+  files: (File | string)[] = [],
+): Promise<Response> {
+  const form = new FormData();
+  for (const [name, value] of Object.entries(fields)) form.append(name, JSON.stringify(value));
+  for (const file of files)
+    form.append('files', typeof file === 'string' ? new File([file], 'upload') : file);
+  return fetch(apiUrl(path), {
+    method: 'POST',
+    headers: { 'X-XSRF-TOKEN': csrfToken() },
+    body: form,
+  });
+}
+
 /** Fetches the CSRF cookie and signs in, like the app does on startup. */
 export async function signIn(username = 'student', password = username): Promise<void> {
   await apiGet('/api/auth/me');

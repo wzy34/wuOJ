@@ -1,24 +1,20 @@
 package dev.wuoj.importer;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Stream;
 
+import dev.wuoj.problem.ProblemEditor;
 import dev.wuoj.problem.ProblemRepository;
-import dev.wuoj.testdata.TestDataRepository;
-import dev.wuoj.testdata.TestDataStore;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Imports problem packages. A package is matched to an existing problem by slug and updated in place; tests that
  * changed become a new test-data version, while older submissions keep the version (and verdict) they were judged
- * with.
+ * with. A problem last edited in the web app is only overwritten when the import is forced.
  */
 @Service
 public class ProblemImporter {
@@ -34,31 +30,40 @@ public class ProblemImporter {
 
     private final ProblemPackageReader reader = new ProblemPackageReader();
     private final ProblemRepository problems;
-    private final TestDataRepository testdata;
-    private final TestDataStore store;
-    private final TransactionTemplate transactions;
+    private final ProblemEditor editor;
 
-    public ProblemImporter(ProblemRepository problems, TestDataRepository testdata, TestDataStore store,
-            TransactionTemplate transactions) {
+    public ProblemImporter(ProblemRepository problems, ProblemEditor editor) {
         this.problems = problems;
-        this.testdata = testdata;
-        this.store = store;
-        this.transactions = transactions;
+        this.editor = editor;
     }
 
-    /** One package (a directory with {@code problem.yaml}), or every package directly inside a directory. */
     public List<Report> importPath(Path path) throws IOException {
+        return importPath(path, false);
+    }
+
+    /**
+     * One package (a directory with {@code problem.yaml}), or every package directly inside a directory.
+     *
+     * @param force overwrite problems that were last edited in the web app
+     */
+    public List<Report> importPath(Path path, boolean force) throws IOException {
         if (Files.isRegularFile(path.resolve("problem.yaml")) || !Files.isDirectory(path)) {
-            return List.of(importPackage(path));
+            return List.of(importPackage(path, force));
         }
         List<Report> reports = new ArrayList<>();
         try (Stream<Path> entries = Files.list(path)) {
-            for (Path dir : entries.filter(Files::isDirectory).sorted().toList()) reports.add(importPackage(dir));
+            for (Path dir : entries.filter(Files::isDirectory).sorted().toList()) {
+                reports.add(importPackage(dir, force));
+            }
         }
         return reports;
     }
 
     public Report importPackage(Path dir) {
+        return importPackage(dir, false);
+    }
+
+    public Report importPackage(Path dir, boolean force) {
         String name = dir.getFileName().toString();
         if (!Files.isDirectory(dir)) return new Report(name, Outcome.REJECTED, List.of("not a directory"));
 
@@ -66,41 +71,20 @@ public class ProblemImporter {
         List<String> errors = new ArrayList<>(result.errors());
         ProblemPackage pkg = result.problemPackage();
         if (pkg != null) {
-            problems.slugOfDisplayId(pkg.data().displayId())
-                    .filter(slug -> !slug.equals(pkg.data().slug()))
-                    .ifPresent(slug -> errors.add("problem.yaml: displayId '" + pkg.data().displayId()
-                            + "' is already used by problem '" + slug + "'"));
+            problems.ownerOfDisplayId(pkg.data().displayId())
+                    .filter(owner -> !owner.slug().equals(pkg.data().slug()))
+                    .ifPresent(owner -> errors.add("problem.yaml: displayId '" + pkg.data().displayId()
+                            + "' is already used by problem '" + owner.slug() + "'"));
         }
         if (pkg == null || !errors.isEmpty()) return new Report(name, Outcome.REJECTED, List.copyOf(errors));
 
-        String version = TestDataStore.version(pkg.tests());
-        Outcome outcome = transactions.execute(status -> save(pkg, version));
-        return new Report(name, outcome, List.of());
-    }
-
-    private Outcome save(ProblemPackage pkg, String version) {
-        Optional<ProblemRepository.Stored> existing = problems.findStoredBySlug(pkg.data().slug());
-        long id;
-        Outcome outcome;
-        if (existing.isEmpty()) {
-            id = problems.insert(pkg.data(), version);
-            outcome = Outcome.CREATED;
-        } else {
-            id = existing.get().id();
-            boolean unchanged = existing.get().data().equals(pkg.data())
-                    && existing.get().testdataVersion().equals(version)
-                    && problems.samples(id).equals(pkg.samples());
-            if (unchanged) return Outcome.UNCHANGED;
-            problems.update(id, pkg.data(), version);
-            outcome = Outcome.UPDATED;
-        }
-        try {
-            TestDataStore.Stored stored = store.store(id, version, pkg.tests());
-            testdata.saveVersion(id, version, stored.testCount(), stored.totalBytes());
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-        problems.replaceSamples(id, pkg.samples());
-        return outcome;
+        return switch (editor.importPackage(pkg.data(), pkg.samples(), pkg.tests(), force)) {
+            case CREATED -> new Report(name, Outcome.CREATED, List.of());
+            case UPDATED -> new Report(name, Outcome.UPDATED, List.of());
+            case UNCHANGED -> new Report(name, Outcome.UNCHANGED, List.of());
+            case EDITED_ON_WEB -> new Report(name, Outcome.REJECTED, List.of("problem '" + pkg.data().slug()
+                    + "' was edited in the web app since it was last imported; import with --force to overwrite"
+                    + " those edits"));
+        };
     }
 }

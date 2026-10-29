@@ -12,6 +12,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.unit.DataSize;
 
 class OjPropertiesTest {
 
@@ -62,6 +63,9 @@ class OjPropertiesTest {
                             new OjProperties.Registration(true, 5, Duration.ofHours(1)));
                     assertThat(properties.rateLimit()).isEqualTo(new OjProperties.RateLimit(3,
                             Duration.ofSeconds(10), 2, Duration.ofSeconds(5), 30, Duration.ofMinutes(1)));
+                    assertThat(properties.testdata().maxVersionBytes()).isEqualTo(DataSize.ofMegabytes(512));
+                    assertThat(properties.testdata().staging())
+                            .isEqualTo(properties.testdata().root().resolve(".staging"));
                 });
     }
 

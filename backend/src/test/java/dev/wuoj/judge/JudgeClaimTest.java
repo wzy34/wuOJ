@@ -51,6 +51,16 @@ class JudgeClaimTest extends IntegrationTest {
     }
 
     @Test
+    void judgesWithTheLimitsInForceWhenSubmitted() {
+        fixtures.jdbc().sql("UPDATE problems SET time_limit_ms = 2000, memory_limit_mb = 512").update();
+
+        JudgeRepository.Claim claim = judge.claim(submission, "worker-a", LEASE).orElseThrow();
+
+        assertThat(claim.timeLimitMs()).isEqualTo(1000);
+        assertThat(claim.memoryLimitMb()).isEqualTo(256);
+    }
+
+    @Test
     void duplicateIsDroppedWhileTheLeaseIsLive() {
         assertThat(judge.claim(submission, "worker-a", LEASE)).isPresent();
         assertThat(judge.claim(submission, "worker-b", LEASE)).isEmpty();

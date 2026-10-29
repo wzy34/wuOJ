@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: wuOJ API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Contract between the wuOJ web app and the judge backend.
 
@@ -22,8 +22,11 @@ info:
       response to `GET /api/auth/me`, which clients call on startup before any state-changing request.
     - **Errors**: RFC 9457 problem details (`application/problem+json`), see `ApiProblem`.
     - **Paging**: `page` is 1-based (default 1), `size` defaults to 20 and is at most 100.
-    - **Hidden data**: inputs and expected outputs of non-sample tests are never returned. Submission
-      source code and compiler output are returned only to the submission's owner and to admins.
+    - **Hidden data**: inputs and expected outputs of non-sample tests are returned only by the problem
+      administration operations under `/api/admin`, to admins. Submission source code and compiler
+      output are returned only to the submission's owner and to admins.
+    - **Concurrent edits**: problem updates carry the `revision`, and test saves the `baseVersion`, they
+      were based on; a stale one gets `409` and changes nothing.
 servers:
   - url: /
 tags:
@@ -38,7 +41,7 @@ tags:
   - name: users
     description: Public user profiles
   - name: admin
-    description: Account administration (admins only)
+    description: Account and problem administration (admins only)
 security:
   - sessionCookie: []
 
@@ -505,7 +508,7 @@ paths:
     get:
       tags: [admin]
       operationId: listAuditEntries
-      summary: List admin actions on accounts, newest first
+      summary: List admin actions on accounts and problems, newest first
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -522,6 +525,224 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/admin/problems:
+    get:
+      tags: [admin]
+      operationId: listAdminProblems
+      summary: List all problems, hidden ones included
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: q
+          in: query
+          description: Case-insensitive substring match on the title.
+          schema:
+            type: string
+            maxLength: 100
+        - name: visible
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: A page of problems ordered by display id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProblemPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [admin]
+      operationId: createAdminProblem
+      summary: Create a problem with its tests
+      description: |
+        The new problem is always hidden; `problem.visible` is ignored. Every test file in `manifest`
+        must be an upload (`keep` is not allowed), and at least one test is required. Each file in
+        `files` must be referenced exactly once.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateProblemForm'
+      responses:
+        '201':
+          description: The problem was created.
+          headers:
+            Location:
+              description: URL of the new problem's admin resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProblem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+
+  /api/admin/problems/{id}:
+    get:
+      tags: [admin]
+      operationId: getAdminProblem
+      summary: Get a problem's editable content
+      parameters:
+        - $ref: '#/components/parameters/ProblemId'
+      responses:
+        '200':
+          description: The problem.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [admin]
+      operationId: updateAdminProblem
+      summary: Replace a problem's details, statement, visibility and samples
+      description: |
+        `409` if `revision` is not the current one. A request matching the current content changes
+        nothing and keeps the revision.
+      parameters:
+        - $ref: '#/components/parameters/ProblemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProblemRequest'
+      responses:
+        '200':
+          description: The problem after the update.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProblem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/admin/problems/{id}/tests:
+    get:
+      tags: [admin]
+      operationId: listAdminProblemTests
+      summary: List the tests of a problem's current test-data version
+      parameters:
+        - $ref: '#/components/parameters/ProblemId'
+      responses:
+        '200':
+          description: The current tests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTestSet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [admin]
+      operationId: saveAdminProblemTests
+      summary: Replace a problem's tests with a new ordered list
+      description: |
+        Tests are numbered 1..n in `manifest.tests` order. Each input and output is either kept from a
+        test of `manifest.baseVersion` or uploaded as the `files` part at the given index; every file
+        must be referenced exactly once. `409` if `baseVersion` is not the current version. If the
+        result equals the current tests, nothing changes and `changed` is false.
+      parameters:
+        - $ref: '#/components/parameters/ProblemId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SaveTestsForm'
+      responses:
+        '200':
+          description: The tests now current.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTestSaveResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+
+  /api/admin/problems/{id}/tests/{number}/input:
+    get:
+      tags: [admin]
+      operationId: downloadAdminProblemTestInput
+      summary: Download a test's input from the current version
+      description: Supports a `Range` header (one byte range), answered with `206`.
+      parameters:
+        - $ref: '#/components/parameters/ProblemId'
+        - $ref: '#/components/parameters/TestNumber'
+      responses:
+        '200':
+          $ref: '#/components/responses/TestFile'
+        '206':
+          $ref: '#/components/responses/TestFilePart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/problems/{id}/tests/{number}/output:
+    get:
+      tags: [admin]
+      operationId: downloadAdminProblemTestOutput
+      summary: Download a test's expected output from the current version
+      description: Supports a `Range` header (one byte range), answered with `206`.
+      parameters:
+        - $ref: '#/components/parameters/ProblemId'
+        - $ref: '#/components/parameters/TestNumber'
+      responses:
+        '200':
+          $ref: '#/components/responses/TestFile'
+        '206':
+          $ref: '#/components/responses/TestFilePart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
 components:
   securitySchemes:
@@ -556,6 +777,21 @@ components:
       schema:
         type: integer
         format: int64
+    ProblemId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    TestNumber:
+      name: number
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
     UserId:
       name: id
       in: path
@@ -590,7 +826,37 @@ components:
           schema:
             $ref: '#/components/schemas/ApiProblem'
     Conflict:
-      description: The change is not allowed in the account's current state; `detail` says why.
+      description: |
+        The change is not allowed in the resource's current state, or was based on an outdated revision
+        or test-data version; `detail` says why.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    TestFile:
+      description: The whole file, byte-for-byte, as a download named `<number>.in` or `<number>.out`.
+      headers:
+        Content-Disposition:
+          schema:
+            type: string
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    TestFilePart:
+      description: The requested byte range of the file.
+      headers:
+        Content-Range:
+          schema:
+            type: string
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    PayloadTooLarge:
+      description: An upload is over a size limit; `detail` names the limit.
       content:
         application/problem+json:
           schema:
@@ -797,11 +1063,12 @@ components:
 
     AuditAction:
       type: string
-      enum: [ROLE_CHANGED, DISABLED, ENABLED, PASSWORD_RESET]
+      enum: [ROLE_CHANGED, DISABLED, ENABLED, PASSWORD_RESET, PROBLEM_CREATED, PROBLEM_UPDATED, TESTS_UPDATED]
 
     AuditEntry:
       type: object
-      required: [id, createdAt, actor, target, action]
+      description: Exactly one of `target` (an account) and `problem` is present.
+      required: [id, createdAt, actor, action]
       properties:
         id:
           type: integer
@@ -819,6 +1086,16 @@ components:
           $ref: '#/components/schemas/UserRole'
         toRole:
           $ref: '#/components/schemas/UserRole'
+        problem:
+          $ref: '#/components/schemas/ProblemRef'
+        fromTestCount:
+          type: integer
+          format: int32
+          description: For `TESTS_UPDATED`.
+        toTestCount:
+          type: integer
+          format: int32
+          description: For `TESTS_UPDATED`.
 
     AuditEntryPage:
       type: object
@@ -840,6 +1117,219 @@ components:
         totalPages:
           type: integer
           format: int32
+
+    AdminProblemSummary:
+      type: object
+      required: [id, displayId, slug, title, difficulty, visible, testCount, updatedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        displayId:
+          type: string
+        slug:
+          type: string
+        title:
+          type: string
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        visible:
+          type: boolean
+        testCount:
+          type: integer
+          format: int32
+        updatedAt:
+          type: string
+          format: date-time
+
+    AdminProblemPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminProblemSummary'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    ProblemContent:
+      type: object
+      description: |
+        The editable content of a problem. The server checks the same rules as the problem importer and
+        reports every invalid field; display ids and slugs must not be used by another problem.
+      required: [displayId, slug, title, difficulty, timeLimitMs, memoryLimitMb, statement, visible, samples]
+      properties:
+        displayId:
+          type: string
+          description: 1–32 letters, digits, `-` or `_`.
+        slug:
+          type: string
+          description: At most 64 lowercase letters and digits separated by single hyphens.
+        title:
+          type: string
+          description: Not blank, at most 200 characters.
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        timeLimitMs:
+          type: integer
+          format: int32
+          description: 100–10,000.
+        memoryLimitMb:
+          type: integer
+          format: int32
+          description: 16–1,024.
+        statement:
+          type: string
+          description: Markdown, as for `Problem.statement`; not blank.
+        visible:
+          type: boolean
+        samples:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sample'
+
+    AdminProblem:
+      type: object
+      required: [id, revision, testdataVersion, testCount, updatedAt, content]
+      properties:
+        id:
+          type: integer
+          format: int64
+        revision:
+          type: integer
+          format: int32
+          description: Increases with every change to the content; send it back with an update.
+        testdataVersion:
+          type: string
+          description: The current test-data version; send it back as `baseVersion` when saving tests.
+        testCount:
+          type: integer
+          format: int32
+        updatedAt:
+          type: string
+          format: date-time
+        content:
+          $ref: '#/components/schemas/ProblemContent'
+
+    UpdateProblemRequest:
+      type: object
+      required: [revision, content]
+      properties:
+        revision:
+          type: integer
+          format: int32
+        content:
+          $ref: '#/components/schemas/ProblemContent'
+
+    AdminTest:
+      type: object
+      required: [number, inputBytes, outputBytes]
+      properties:
+        number:
+          type: integer
+          format: int32
+        inputBytes:
+          type: integer
+          format: int64
+        outputBytes:
+          type: integer
+          format: int64
+
+    AdminTestSet:
+      type: object
+      required: [version, tests]
+      properties:
+        version:
+          type: string
+        tests:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminTest'
+
+    TestFileRef:
+      type: object
+      description: Exactly one of `keep` (a test number of the base version) and `upload` (an index into `files`).
+      minProperties: 1
+      maxProperties: 1
+      properties:
+        keep:
+          type: integer
+          format: int32
+          minimum: 1
+        upload:
+          type: integer
+          format: int32
+          minimum: 0
+
+    TestEntry:
+      type: object
+      required: [input, output]
+      properties:
+        input:
+          $ref: '#/components/schemas/TestFileRef'
+        output:
+          $ref: '#/components/schemas/TestFileRef'
+
+    TestManifest:
+      type: object
+      required: [tests]
+      properties:
+        baseVersion:
+          type: string
+          description: Required when saving tests; absent when creating a problem.
+        tests:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/TestEntry'
+
+    CreateProblemForm:
+      type: object
+      required: [problem, manifest]
+      properties:
+        problem:
+          $ref: '#/components/schemas/ProblemContent'
+        manifest:
+          $ref: '#/components/schemas/TestManifest'
+        files:
+          type: array
+          items:
+            type: string
+            format: binary
+
+    SaveTestsForm:
+      type: object
+      required: [manifest]
+      properties:
+        manifest:
+          $ref: '#/components/schemas/TestManifest'
+        files:
+          type: array
+          items:
+            type: string
+            format: binary
+
+    AdminTestSaveResult:
+      type: object
+      required: [changed, testSet]
+      properties:
+        changed:
+          type: boolean
+          description: False if the tests were identical to the current ones and nothing changed.
+        testSet:
+          $ref: '#/components/schemas/AdminTestSet'
 
     UserRef:
       type: object

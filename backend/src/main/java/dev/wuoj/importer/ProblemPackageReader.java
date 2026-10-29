@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 
 import dev.wuoj.common.domain.Difficulty;
 import dev.wuoj.problem.ProblemData;
+import dev.wuoj.problem.ProblemRules;
 import dev.wuoj.problem.Sample;
 import dev.wuoj.testdata.TestCaseFiles;
 import org.jspecify.annotations.Nullable;
@@ -36,9 +37,7 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  */
 public class ProblemPackageReader {
 
-    public static final long MAX_TEST_FILE_BYTES = 64L * 1024 * 1024;
-    static final Pattern SLUG = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
-    static final Pattern DISPLAY_ID = Pattern.compile("[A-Za-z0-9_-]{1,32}");
+    public static final long MAX_TEST_FILE_BYTES = ProblemRules.MAX_TEST_FILE_BYTES;
     private static final Pattern CASE_FILE = Pattern.compile("([1-9][0-9]*)\\.(in|out)");
     private static final YAMLMapper YAML = YAMLMapper.builder().build();
 
@@ -80,14 +79,20 @@ public class ProblemPackageReader {
         }
 
         Fields fields = new Fields(yaml, errors);
-        String displayId = fields.string("displayId", DISPLAY_ID, "1-32 letters, digits, '-' or '_'");
-        String slug = fields.string("slug", SLUG, "lowercase letters and digits separated by single hyphens");
-        if (slug != null && slug.length() > 64) errors.add("problem.yaml: slug must be at most 64 characters");
+        String displayId = fields.string("displayId", ProblemRules.DISPLAY_ID, ProblemRules.DISPLAY_ID_RULE);
+        String slug = fields.string("slug", ProblemRules.SLUG, ProblemRules.SLUG_RULE);
+        if (slug != null && slug.length() > ProblemRules.MAX_SLUG_LENGTH) {
+            errors.add("problem.yaml: slug must be at most " + ProblemRules.MAX_SLUG_LENGTH + " characters");
+        }
         String title = fields.string("title", null, null);
-        if (title != null && title.length() > 200) errors.add("problem.yaml: title must be at most 200 characters");
+        if (title != null && title.length() > ProblemRules.MAX_TITLE_LENGTH) {
+            errors.add("problem.yaml: title must be at most " + ProblemRules.MAX_TITLE_LENGTH + " characters");
+        }
         Difficulty difficulty = fields.difficulty();
-        Integer timeLimit = fields.integer("timeLimitMs", 100, 10_000);
-        Integer memoryLimit = fields.integer("memoryLimitMb", 16, 1024);
+        Integer timeLimit = fields.integer("timeLimitMs", ProblemRules.MIN_TIME_LIMIT_MS,
+                ProblemRules.MAX_TIME_LIMIT_MS);
+        Integer memoryLimit = fields.integer("memoryLimitMb", ProblemRules.MIN_MEMORY_LIMIT_MB,
+                ProblemRules.MAX_MEMORY_LIMIT_MB);
         boolean visible = fields.bool("visible");
 
         String statement = readText(directory.resolve("statement.md"), "statement.md", errors);

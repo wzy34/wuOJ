@@ -75,6 +75,22 @@ class ImportCommandTest extends RealServerTest {
     }
 
     @Test
+    void forceOverwritesWebEdits() throws Exception {
+        Path problems = Files.createDirectories(temp.resolve("problems"));
+        PackageWriter.valid(problems.resolve("p"), "1001", "p", 1);
+        assertThat(run("import-problems", problems.toString()).exitCode()).isZero();
+        fixtures.jdbc().sql("UPDATE problems SET title = 'Web', last_edit_source = 'WEB'").update();
+
+        Run refused = run("import-problems", problems.toString());
+        assertThat(refused.exitCode()).isEqualTo(1);
+        assertThat(refused.output()).contains("REJECTED   p").contains("--force");
+
+        Run forced = run("import-problems", "--force", problems.toString());
+        assertThat(forced.exitCode()).isZero();
+        assertThat(forced.output()).contains("UPDATED    p");
+    }
+
+    @Test
     void invalidCsvGivesNonZeroExit() throws Exception {
         Path users = Files.writeString(temp.resolve("users.csv"), "username,password,role\nx,y,TEACHER\n");
         Run result = run("import-users", users.toString());

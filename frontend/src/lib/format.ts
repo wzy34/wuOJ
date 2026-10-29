@@ -30,3 +30,10 @@ export function formatMemory(kb: number | undefined): string {
 export function formatTimeLimit(ms: number): string {
   return ms % 1000 === 0 ? `${ms / 1000} s` : `${ms} ms`;
 }
+
+/** A file size, e.g. "512 B", "3.4 KB", "12.0 MB". */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

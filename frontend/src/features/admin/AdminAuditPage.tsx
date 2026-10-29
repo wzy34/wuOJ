@@ -31,10 +31,18 @@ const columns: ColumnProps<AuditEntry>[] = [
     render: (actor: UserRef) => <UserLink user={actor} />,
   },
   {
-    title: 'Account',
+    title: 'Target',
     dataIndex: 'target',
-    width: 160,
-    render: (target: UserRef) => <UserLink user={target} />,
+    width: 220,
+    // An account, or a problem (linking to its editor).
+    render: (_: unknown, entry) =>
+      entry.problem ? (
+        <Link to={`/admin/problems/${entry.problem.id}`}>
+          {entry.problem.displayId}. {entry.problem.title}
+        </Link>
+      ) : entry.target ? (
+        <UserLink user={entry.target} />
+      ) : null,
   },
   { title: 'Action', dataIndex: 'action', render: (_: unknown, entry) => describeAction(entry) },
 ];

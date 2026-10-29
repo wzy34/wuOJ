@@ -10,6 +10,7 @@ import dev.wuoj.common.domain.Viewer;
 import dev.wuoj.common.web.InvalidFieldsException;
 import dev.wuoj.common.web.Page;
 import dev.wuoj.common.web.PageRequest;
+import dev.wuoj.submission.SubmissionDtos.ProblemRef;
 import dev.wuoj.submission.SubmissionDtos.UserRef;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -47,13 +48,19 @@ public class AdminUserController {
 
     public record PasswordReset(String temporaryPassword) {}
 
-    public record AuditEntry(long id, Instant createdAt, UserRef actor, UserRef target, AuditAction action,
-            @Nullable UserRole fromRole, @Nullable UserRole toRole) {
+    /** Exactly one of {@code target} and {@code problem} is present. */
+    public record AuditEntry(long id, Instant createdAt, UserRef actor, @Nullable UserRef target,
+            @Nullable ProblemRef problem, AuditAction action, @Nullable UserRole fromRole, @Nullable UserRole toRole,
+            @Nullable Integer fromTestCount, @Nullable Integer toTestCount) {
 
         static AuditEntry of(AuditRepository.Entry entry) {
+            AuditRepository.Account target = entry.target();
+            AuditRepository.Problem problem = entry.problem();
             return new AuditEntry(entry.id(), entry.createdAt(), new UserRef(entry.actorId(), entry.actorUsername()),
-                    new UserRef(entry.targetId(), entry.targetUsername()), entry.action(), entry.fromRole(),
-                    entry.toRole());
+                    target == null ? null : new UserRef(target.id(), target.username()),
+                    problem == null ? null
+                            : new ProblemRef(problem.id(), problem.displayId(), problem.slug(), problem.title()),
+                    entry.action(), entry.fromRole(), entry.toRole(), entry.fromTestCount(), entry.toTestCount());
         }
     }
 

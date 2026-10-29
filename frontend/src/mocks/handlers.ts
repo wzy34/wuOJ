@@ -4,6 +4,7 @@ import { getAuthMock } from '@/api/generated/auth/auth.msw';
 import { getProblemsMock } from '@/api/generated/problems/problems.msw';
 import { getSubmissionsMock } from '@/api/generated/submissions/submissions.msw';
 import { getUsersMock } from '@/api/generated/users/users.msw';
+import { adminProblemHandlers } from './handlers/adminProblems';
 import { authHandlers } from './handlers/auth';
 import { problemHandlers } from './handlers/problems';
 import { submissionEventHandlers, submissionHandlers } from './handlers/submissions';
@@ -20,6 +21,7 @@ export function createHandlers() {
     ...submissionHandlers,
     ...submissionEventHandlers(),
     ...userHandlers,
+    ...adminProblemHandlers,
     ...getAuthMock(),
     ...getAccountMock(),
     ...getProblemsMock(),

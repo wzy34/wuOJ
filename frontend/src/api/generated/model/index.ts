@@ -21,12 +21,21 @@
  *   response to `GET /api/auth/me`, which clients call on startup before any state-changing request.
  * - **Errors**: RFC 9457 problem details (`application/problem+json`), see `ApiProblem`.
  * - **Paging**: `page` is 1-based (default 1), `size` defaults to 20 and is at most 100.
- * - **Hidden data**: inputs and expected outputs of non-sample tests are never returned. Submission
- *   source code and compiler output are returned only to the submission's owner and to admins.
+ * - **Hidden data**: inputs and expected outputs of non-sample tests are returned only by the problem
+ *   administration operations under `/api/admin`, to admins. Submission source code and compiler
+ *   output are returned only to the submission's owner and to admins.
+ * - **Concurrent edits**: problem updates carry the `revision`, and test saves the `baseVersion`, they
+ *   were based on; a stale one gets `409` and changes nothing.
  *
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
+export * from './adminProblem';
+export * from './adminProblemPage';
+export * from './adminProblemSummary';
+export * from './adminTest';
+export * from './adminTestSaveResult';
+export * from './adminTestSet';
 export * from './adminUser';
 export * from './adminUserPage';
 export * from './apiProblem';
@@ -37,12 +46,14 @@ export * from './authOptions';
 export * from './badRequestResponse';
 export * from './changePasswordRequest';
 export * from './conflictResponse';
+export * from './createProblemForm';
 export * from './createSubmissionRequest';
 export * from './currentUser';
 export * from './difficulty';
 export * from './fieldError';
 export * from './forbiddenResponse';
 export * from './language';
+export * from './listAdminProblemsParams';
 export * from './listAdminUsersParams';
 export * from './listAuditEntriesParams';
 export * from './listProblemsParams';
@@ -51,13 +62,16 @@ export * from './loginRequest';
 export * from './notFoundResponse';
 export * from './pageParameter';
 export * from './passwordReset';
+export * from './payloadTooLargeResponse';
 export * from './problem';
+export * from './problemContent';
 export * from './problemPage';
 export * from './problemRef';
 export * from './problemSummary';
 export * from './problemUserStatus';
 export * from './registerRequest';
 export * from './sample';
+export * from './saveTestsForm';
 export * from './sizeParameter';
 export * from './submissionDetail';
 export * from './submissionPage';
@@ -65,9 +79,15 @@ export * from './submissionScope';
 export * from './submissionStatus';
 export * from './submissionStatusEvent';
 export * from './submissionSummary';
+export * from './testEntry';
+export * from './testFilePartResponse';
+export * from './testFileRef';
+export * from './testFileResponse';
+export * from './testManifest';
 export * from './testResult';
 export * from './tooManyRequestsResponse';
 export * from './unauthorizedResponse';
+export * from './updateProblemRequest';
 export * from './updateUserRequest';
 export * from './userProfile';
 export * from './userRef';

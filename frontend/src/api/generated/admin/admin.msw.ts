@@ -21,18 +21,32 @@
  *   response to `GET /api/auth/me`, which clients call on startup before any state-changing request.
  * - **Errors**: RFC 9457 problem details (`application/problem+json`), see `ApiProblem`.
  * - **Paging**: `page` is 1-based (default 1), `size` defaults to 20 and is at most 100.
- * - **Hidden data**: inputs and expected outputs of non-sample tests are never returned. Submission
- *   source code and compiler output are returned only to the submission's owner and to admins.
+ * - **Hidden data**: inputs and expected outputs of non-sample tests are returned only by the problem
+ *   administration operations under `/api/admin`, to admins. Submission source code and compiler
+ *   output are returned only to the submission's owner and to admins.
+ * - **Concurrent edits**: problem updates carry the `revision`, and test saves the `baseVersion`, they
+ *   were based on; a stale one gets `409` and changes nothing.
  *
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import { faker } from '@faker-js/faker';
 
 import { HttpResponse, http } from 'msw';
 import type { RequestHandlerOptions } from 'msw';
 
-import { AuditAction, UserRole } from '../model';
-import type { AdminUser, AdminUserPage, AuditEntryPage, PasswordReset } from '../model';
+import { AuditAction, Difficulty, UserRole } from '../model';
+import type {
+  AdminProblem,
+  AdminProblemPage,
+  AdminTestSaveResult,
+  AdminTestSet,
+  AdminUser,
+  AdminUserPage,
+  AuditEntryPage,
+  PasswordReset,
+  TestFilePartResponse,
+  TestFileResponse,
+} from '../model';
 
 export const getListAdminUsersResponseMock = (
   overrideResponse: Partial<Extract<AdminUserPage, object>> = {},
@@ -89,10 +103,10 @@ export const getListAuditEntriesResponseMock = (
       id: faker.number.int(),
       username: faker.string.alpha({ length: { min: 10, max: 20 } }),
     },
-    target: {
-      id: faker.number.int(),
-      username: faker.string.alpha({ length: { min: 10, max: 20 } }),
-    },
+    target: faker.helpers.arrayElement([
+      { id: faker.number.int(), username: faker.string.alpha({ length: { min: 10, max: 20 } }) },
+      undefined,
+    ]),
     action: faker.helpers.arrayElement(Object.values(AuditAction)),
     fromRole: faker.helpers.arrayElement([
       faker.helpers.arrayElement(Object.values(UserRole)),
@@ -102,6 +116,17 @@ export const getListAuditEntriesResponseMock = (
       faker.helpers.arrayElement(Object.values(UserRole)),
       undefined,
     ]),
+    problem: faker.helpers.arrayElement([
+      {
+        id: faker.number.int(),
+        displayId: faker.string.alpha({ length: { min: 10, max: 20 } }),
+        slug: faker.string.alpha({ length: { min: 10, max: 20 } }),
+        title: faker.string.alpha({ length: { min: 10, max: 20 } }),
+      },
+      undefined,
+    ]),
+    fromTestCount: faker.helpers.arrayElement([faker.number.int(), undefined]),
+    toTestCount: faker.helpers.arrayElement([faker.number.int(), undefined]),
   })),
   page: faker.number.int(),
   size: faker.number.int(),
@@ -109,6 +134,150 @@ export const getListAuditEntriesResponseMock = (
   totalPages: faker.number.int(),
   ...overrideResponse,
 });
+
+export const getListAdminProblemsResponseMock = (
+  overrideResponse: Partial<Extract<AdminProblemPage, object>> = {},
+): AdminProblemPage => ({
+  items: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(() => ({
+    id: faker.number.int(),
+    displayId: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    slug: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    title: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    difficulty: faker.helpers.arrayElement(Object.values(Difficulty)),
+    visible: faker.datatype.boolean(),
+    testCount: faker.number.int(),
+    updatedAt: faker.date.past().toISOString().slice(0, 19) + 'Z',
+  })),
+  page: faker.number.int(),
+  size: faker.number.int(),
+  totalItems: faker.number.int(),
+  totalPages: faker.number.int(),
+  ...overrideResponse,
+});
+
+export const getCreateAdminProblemResponseMock = (
+  overrideResponse: Partial<Extract<AdminProblem, object>> = {},
+): AdminProblem => ({
+  id: faker.number.int(),
+  revision: faker.number.int(),
+  testdataVersion: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  testCount: faker.number.int(),
+  updatedAt: faker.date.past().toISOString().slice(0, 19) + 'Z',
+  content: {
+    displayId: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    slug: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    title: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    difficulty: faker.helpers.arrayElement(Object.values(Difficulty)),
+    timeLimitMs: faker.number.int(),
+    memoryLimitMb: faker.number.int(),
+    statement: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    visible: faker.datatype.boolean(),
+    samples: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(
+      () => ({
+        input: faker.string.alpha({ length: { min: 10, max: 20 } }),
+        output: faker.string.alpha({ length: { min: 10, max: 20 } }),
+      }),
+    ),
+  },
+  ...overrideResponse,
+});
+
+export const getGetAdminProblemResponseMock = (
+  overrideResponse: Partial<Extract<AdminProblem, object>> = {},
+): AdminProblem => ({
+  id: faker.number.int(),
+  revision: faker.number.int(),
+  testdataVersion: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  testCount: faker.number.int(),
+  updatedAt: faker.date.past().toISOString().slice(0, 19) + 'Z',
+  content: {
+    displayId: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    slug: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    title: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    difficulty: faker.helpers.arrayElement(Object.values(Difficulty)),
+    timeLimitMs: faker.number.int(),
+    memoryLimitMb: faker.number.int(),
+    statement: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    visible: faker.datatype.boolean(),
+    samples: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(
+      () => ({
+        input: faker.string.alpha({ length: { min: 10, max: 20 } }),
+        output: faker.string.alpha({ length: { min: 10, max: 20 } }),
+      }),
+    ),
+  },
+  ...overrideResponse,
+});
+
+export const getUpdateAdminProblemResponseMock = (
+  overrideResponse: Partial<Extract<AdminProblem, object>> = {},
+): AdminProblem => ({
+  id: faker.number.int(),
+  revision: faker.number.int(),
+  testdataVersion: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  testCount: faker.number.int(),
+  updatedAt: faker.date.past().toISOString().slice(0, 19) + 'Z',
+  content: {
+    displayId: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    slug: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    title: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    difficulty: faker.helpers.arrayElement(Object.values(Difficulty)),
+    timeLimitMs: faker.number.int(),
+    memoryLimitMb: faker.number.int(),
+    statement: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    visible: faker.datatype.boolean(),
+    samples: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(
+      () => ({
+        input: faker.string.alpha({ length: { min: 10, max: 20 } }),
+        output: faker.string.alpha({ length: { min: 10, max: 20 } }),
+      }),
+    ),
+  },
+  ...overrideResponse,
+});
+
+export const getListAdminProblemTestsResponseMock = (
+  overrideResponse: Partial<Extract<AdminTestSet, object>> = {},
+): AdminTestSet => ({
+  version: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  tests: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(() => ({
+    number: faker.number.int(),
+    inputBytes: faker.number.int(),
+    outputBytes: faker.number.int(),
+  })),
+  ...overrideResponse,
+});
+
+export const getSaveAdminProblemTestsResponseMock = (
+  overrideResponse: Partial<Extract<AdminTestSaveResult, object>> = {},
+): AdminTestSaveResult => ({
+  changed: faker.datatype.boolean(),
+  testSet: {
+    version: faker.string.alpha({ length: { min: 10, max: 20 } }),
+    tests: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(
+      () => ({
+        number: faker.number.int(),
+        inputBytes: faker.number.int(),
+        outputBytes: faker.number.int(),
+      }),
+    ),
+  },
+  ...overrideResponse,
+});
+
+export const getDownloadAdminProblemTestInputResponseMock = ():
+  TestFileResponse | TestFilePartResponse =>
+  faker.helpers.arrayElement([
+    new Blob([new Uint8Array(faker.number.int({ min: 1, max: 64 }))]),
+    new Blob([new Uint8Array(faker.number.int({ min: 1, max: 64 }))]),
+  ]);
+
+export const getDownloadAdminProblemTestOutputResponseMock = ():
+  TestFileResponse | TestFilePartResponse =>
+  faker.helpers.arrayElement([
+    new Blob([new Uint8Array(faker.number.int({ min: 1, max: 64 }))]),
+    new Blob([new Uint8Array(faker.number.int({ min: 1, max: 64 }))]),
+  ]);
 
 export const getListAdminUsersMockHandler = (
   overrideResponse?:
@@ -203,9 +372,217 @@ export const getListAuditEntriesMockHandler = (
     options,
   );
 };
+
+export const getListAdminProblemsMockHandler = (
+  overrideResponse?:
+    | AdminProblemPage
+    | ((
+        info: Parameters<Parameters<typeof http.get>[1]>[0],
+      ) => Promise<AdminProblemPage> | AdminProblemPage),
+  options?: RequestHandlerOptions,
+) => {
+  return http.get(
+    '*/api/admin/problems',
+    async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+      return HttpResponse.json(
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getListAdminProblemsResponseMock(),
+        { status: 200 },
+      );
+    },
+    options,
+  );
+};
+
+export const getCreateAdminProblemMockHandler = (
+  overrideResponse?:
+    | AdminProblem
+    | ((
+        info: Parameters<Parameters<typeof http.post>[1]>[0],
+      ) => Promise<AdminProblem> | AdminProblem),
+  options?: RequestHandlerOptions,
+) => {
+  return http.post(
+    '*/api/admin/problems',
+    async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+      return HttpResponse.json(
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getCreateAdminProblemResponseMock(),
+        { status: 201 },
+      );
+    },
+    options,
+  );
+};
+
+export const getGetAdminProblemMockHandler = (
+  overrideResponse?:
+    | AdminProblem
+    | ((
+        info: Parameters<Parameters<typeof http.get>[1]>[0],
+      ) => Promise<AdminProblem> | AdminProblem),
+  options?: RequestHandlerOptions,
+) => {
+  return http.get(
+    '*/api/admin/problems/:id',
+    async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+      return HttpResponse.json(
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getGetAdminProblemResponseMock(),
+        { status: 200 },
+      );
+    },
+    options,
+  );
+};
+
+export const getUpdateAdminProblemMockHandler = (
+  overrideResponse?:
+    | AdminProblem
+    | ((
+        info: Parameters<Parameters<typeof http.put>[1]>[0],
+      ) => Promise<AdminProblem> | AdminProblem),
+  options?: RequestHandlerOptions,
+) => {
+  return http.put(
+    '*/api/admin/problems/:id',
+    async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
+      return HttpResponse.json(
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getUpdateAdminProblemResponseMock(),
+        { status: 200 },
+      );
+    },
+    options,
+  );
+};
+
+export const getListAdminProblemTestsMockHandler = (
+  overrideResponse?:
+    | AdminTestSet
+    | ((
+        info: Parameters<Parameters<typeof http.get>[1]>[0],
+      ) => Promise<AdminTestSet> | AdminTestSet),
+  options?: RequestHandlerOptions,
+) => {
+  return http.get(
+    '*/api/admin/problems/:id/tests',
+    async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+      return HttpResponse.json(
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getListAdminProblemTestsResponseMock(),
+        { status: 200 },
+      );
+    },
+    options,
+  );
+};
+
+export const getSaveAdminProblemTestsMockHandler = (
+  overrideResponse?:
+    | AdminTestSaveResult
+    | ((
+        info: Parameters<Parameters<typeof http.post>[1]>[0],
+      ) => Promise<AdminTestSaveResult> | AdminTestSaveResult),
+  options?: RequestHandlerOptions,
+) => {
+  return http.post(
+    '*/api/admin/problems/:id/tests',
+    async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+      return HttpResponse.json(
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getSaveAdminProblemTestsResponseMock(),
+        { status: 200 },
+      );
+    },
+    options,
+  );
+};
+
+export const getDownloadAdminProblemTestInputMockHandler = (
+  overrideResponse?:
+    | TestFileResponse
+    | TestFilePartResponse
+    | ((
+        info: Parameters<Parameters<typeof http.get>[1]>[0],
+      ) =>
+        Promise<TestFileResponse | TestFilePartResponse> | TestFileResponse | TestFilePartResponse),
+  options?: RequestHandlerOptions,
+) => {
+  return http.get(
+    '*/api/admin/problems/:id/tests/:number/input',
+    async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+      const binaryBody =
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getDownloadAdminProblemTestInputResponseMock();
+      return new HttpResponse(binaryBody, {
+        status: 200,
+        headers: { 'Content-Type': 'application/octet-stream' },
+      });
+    },
+    options,
+  );
+};
+
+export const getDownloadAdminProblemTestOutputMockHandler = (
+  overrideResponse?:
+    | TestFileResponse
+    | TestFilePartResponse
+    | ((
+        info: Parameters<Parameters<typeof http.get>[1]>[0],
+      ) =>
+        Promise<TestFileResponse | TestFilePartResponse> | TestFileResponse | TestFilePartResponse),
+  options?: RequestHandlerOptions,
+) => {
+  return http.get(
+    '*/api/admin/problems/:id/tests/:number/output',
+    async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+      const binaryBody =
+        overrideResponse !== undefined
+          ? typeof overrideResponse === 'function'
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getDownloadAdminProblemTestOutputResponseMock();
+      return new HttpResponse(binaryBody, {
+        status: 200,
+        headers: { 'Content-Type': 'application/octet-stream' },
+      });
+    },
+    options,
+  );
+};
 export const getAdminMock = () => [
   getListAdminUsersMockHandler(),
   getUpdateAdminUserMockHandler(),
   getResetUserPasswordMockHandler(),
   getListAuditEntriesMockHandler(),
+  getListAdminProblemsMockHandler(),
+  getCreateAdminProblemMockHandler(),
+  getGetAdminProblemMockHandler(),
+  getUpdateAdminProblemMockHandler(),
+  getListAdminProblemTestsMockHandler(),
+  getSaveAdminProblemTestsMockHandler(),
+  getDownloadAdminProblemTestInputMockHandler(),
+  getDownloadAdminProblemTestOutputMockHandler(),
 ];

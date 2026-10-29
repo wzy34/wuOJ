@@ -35,10 +35,14 @@ public class SubmissionRepository {
         this.jdbc = jdbc;
     }
 
+    /** The submission is judged with the problem's limits as they are now; see {@code JudgeRepository#claim}. */
     public long insert(long userId, long problemId, Language language, String sourceCode, String testdataVersion) {
         return jdbc.sql("""
-                        INSERT INTO submissions (user_id, problem_id, language, source_code, testdata_version)
-                        VALUES (:userId, :problemId, :language, :sourceCode, :version) RETURNING id""")
+                        INSERT INTO submissions (user_id, problem_id, language, source_code, testdata_version,
+                                                 time_limit_ms, memory_limit_mb)
+                        SELECT :userId, p.id, :language, :sourceCode, :version, p.time_limit_ms, p.memory_limit_mb
+                          FROM problems p WHERE p.id = :problemId
+                        RETURNING id""")
                 .param("userId", userId)
                 .param("problemId", problemId)
                 .param("language", language.name())

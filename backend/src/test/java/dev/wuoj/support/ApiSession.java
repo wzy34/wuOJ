@@ -13,7 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * A browser-like client: keeps the cookies the server sets and, like the web app, echoes the {@code XSRF-TOKEN}
@@ -48,16 +48,17 @@ public class ApiSession {
         return this;
     }
 
-    public ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+    public ResultActions perform(AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
         return exchange(request, true);
     }
 
     /** For requests that are invalid on purpose: only the response is checked against the contract. */
-    public ResultActions performInvalid(MockHttpServletRequestBuilder request) throws Exception {
+    public ResultActions performInvalid(AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
         return exchange(request, false);
     }
 
-    private ResultActions exchange(MockHttpServletRequestBuilder request, boolean validateRequest) throws Exception {
+    private ResultActions exchange(AbstractMockHttpServletRequestBuilder<?> request, boolean validateRequest)
+            throws Exception {
         if (!cookies.isEmpty()) request.cookie(cookies.values().toArray(Cookie[]::new));
         String token = cookie("XSRF-TOKEN");
         if (sendCsrfHeader && token != null) request.header("X-XSRF-TOKEN", token);

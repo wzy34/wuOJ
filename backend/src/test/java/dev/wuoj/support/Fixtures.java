@@ -56,7 +56,7 @@ public class Fixtures {
 
     public long problem(ProblemData data, int testCount) {
         // The version row references the problem, so the problem is created first with the version name.
-        long id = problems.insert(data, VERSION);
+        long id = problems.insert(data, VERSION, ProblemRepository.EditSource.IMPORT);
         testdata.saveVersion(id, VERSION, testCount, 0);
         problems.replaceSamples(id, List.of(new Sample("1 2\n", "3\n"), new Sample("-5 12\n", "7\n")));
         return id;

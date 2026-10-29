@@ -21,10 +21,13 @@
  *   response to `GET /api/auth/me`, which clients call on startup before any state-changing request.
  * - **Errors**: RFC 9457 problem details (`application/problem+json`), see `ApiProblem`.
  * - **Paging**: `page` is 1-based (default 1), `size` defaults to 20 and is at most 100.
- * - **Hidden data**: inputs and expected outputs of non-sample tests are never returned. Submission
- *   source code and compiler output are returned only to the submission's owner and to admins.
+ * - **Hidden data**: inputs and expected outputs of non-sample tests are returned only by the problem
+ *   administration operations under `/api/admin`, to admins. Submission source code and compiler
+ *   output are returned only to the submission's owner and to admins.
+ * - **Concurrent edits**: problem updates carry the `revision`, and test saves the `baseVersion`, they
+ *   were based on; a stale one gets `409` and changes nothing.
  *
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type {
@@ -43,17 +46,28 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminProblem,
+  AdminProblemPage,
+  AdminTestSaveResult,
+  AdminTestSet,
   AdminUser,
   AdminUserPage,
   AuditEntryPage,
   BadRequestResponse,
   ConflictResponse,
+  CreateProblemForm,
   ForbiddenResponse,
+  ListAdminProblemsParams,
   ListAdminUsersParams,
   ListAuditEntriesParams,
   NotFoundResponse,
   PasswordReset,
+  PayloadTooLargeResponse,
+  SaveTestsForm,
+  TestFilePartResponse,
+  TestFileResponse,
   UnauthorizedResponse,
+  UpdateProblemRequest,
   UpdateUserRequest,
 } from '../model';
 
@@ -400,7 +414,7 @@ export const useResetUserPassword = <
   return useMutation(getResetUserPasswordMutationOptions(options), queryClient);
 };
 /**
- * @summary List admin actions on accounts, newest first
+ * @summary List admin actions on accounts and problems, newest first
  */
 export const listAuditEntries = (
   params?: ListAuditEntriesParams,
@@ -496,7 +510,7 @@ export function useListAuditEntries<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 /**
- * @summary List admin actions on accounts, newest first
+ * @summary List admin actions on accounts and problems, newest first
  */
 
 export function useListAuditEntries<
@@ -511,6 +525,1026 @@ export function useListAuditEntries<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getListAuditEntriesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary List all problems, hidden ones included
+ */
+export const listAdminProblems = (
+  params?: ListAdminProblemsParams,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<AdminProblemPage>(
+    { url: `/api/admin/problems`, method: 'GET', params, signal },
+    options,
+  );
+};
+
+export const getListAdminProblemsQueryKey = (params?: ListAdminProblemsParams) => {
+  return [`/api/admin/problems`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminProblemsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminProblems>>,
+  TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+>(
+  params?: ListAdminProblemsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminProblems>>, TError, TData>>;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminProblemsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminProblems>>> = ({ signal }) =>
+    listAdminProblems(params, requestOptions, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminProblems>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ListAdminProblemsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminProblems>>
+>;
+export type ListAdminProblemsQueryError = ErrorType<
+  BadRequestResponse | UnauthorizedResponse | ForbiddenResponse
+>;
+
+export function useListAdminProblems<
+  TData = Awaited<ReturnType<typeof listAdminProblems>>,
+  TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+>(
+  params: undefined | ListAdminProblemsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminProblems>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminProblems>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminProblems>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useListAdminProblems<
+  TData = Awaited<ReturnType<typeof listAdminProblems>>,
+  TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+>(
+  params?: ListAdminProblemsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminProblems>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminProblems>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminProblems>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useListAdminProblems<
+  TData = Awaited<ReturnType<typeof listAdminProblems>>,
+  TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+>(
+  params?: ListAdminProblemsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminProblems>>, TError, TData>>;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary List all problems, hidden ones included
+ */
+
+export function useListAdminProblems<
+  TData = Awaited<ReturnType<typeof listAdminProblems>>,
+  TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+>(
+  params?: ListAdminProblemsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminProblems>>, TError, TData>>;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListAdminProblemsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * The new problem is always hidden; `problem.visible` is ignored. Every test file in `manifest`
+ * must be an upload (`keep` is not allowed), and at least one test is required. Each file in
+ * `files` must be referenced exactly once.
+ * @summary Create a problem with its tests
+ */
+export const createAdminProblem = (
+  createProblemForm: BodyType<CreateProblemForm>,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  const formData = new FormData();
+  formData.append(`problem`, JSON.stringify(createProblemForm.problem));
+  formData.append(`manifest`, JSON.stringify(createProblemForm.manifest));
+  if (createProblemForm.files !== undefined) {
+    createProblemForm.files.forEach((value) => formData.append(`files`, value));
+  }
+
+  return customInstance<AdminProblem>(
+    {
+      url: `/api/admin/problems`,
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/form-data' },
+      data: formData,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getCreateAdminProblemMutationKey = () => ['createAdminProblem'] as const;
+
+export const getCreateAdminProblemMutationOptions = <
+  TError = ErrorType<
+    BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | PayloadTooLargeResponse
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAdminProblem>>,
+    TError,
+    CreateAdminProblemMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAdminProblem>>,
+  TError,
+  CreateAdminProblemMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCreateAdminProblemMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAdminProblem>>,
+    CreateAdminProblemMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createAdminProblem(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateAdminProblemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createAdminProblem>>
+>;
+export type CreateAdminProblemMutationBody = BodyType<CreateProblemForm>;
+export type CreateAdminProblemMutationError = ErrorType<
+  BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | PayloadTooLargeResponse
+>;
+export type CreateAdminProblemMutationVariables = { data: BodyType<CreateProblemForm> };
+
+/**
+ * @summary Create a problem with its tests
+ */
+export const useCreateAdminProblem = <
+  TError = ErrorType<
+    BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | PayloadTooLargeResponse
+  >,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createAdminProblem>>,
+      TError,
+      CreateAdminProblemMutationVariables,
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createAdminProblem>>,
+  TError,
+  CreateAdminProblemMutationVariables,
+  TContext
+> => {
+  return useMutation(getCreateAdminProblemMutationOptions(options), queryClient);
+};
+/**
+ * @summary Get a problem's editable content
+ */
+export const getAdminProblem = (
+  id: number,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<AdminProblem>(
+    { url: `/api/admin/problems/${id}`, method: 'GET', signal },
+    options,
+  );
+};
+
+export const getGetAdminProblemQueryKey = (id: number) => {
+  return [`/api/admin/problems/${id}`] as const;
+};
+
+export const getGetAdminProblemQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminProblem>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminProblem>>, TError, TData>>;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminProblemQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminProblem>>> = ({ signal }) =>
+    getAdminProblem(id, requestOptions, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAdminProblem>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetAdminProblemQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminProblem>>>;
+export type GetAdminProblemQueryError = ErrorType<
+  UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+>;
+
+export function useGetAdminProblem<
+  TData = Awaited<ReturnType<typeof getAdminProblem>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminProblem>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminProblem>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminProblem>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetAdminProblem<
+  TData = Awaited<ReturnType<typeof getAdminProblem>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminProblem>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminProblem>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminProblem>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetAdminProblem<
+  TData = Awaited<ReturnType<typeof getAdminProblem>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminProblem>>, TError, TData>>;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Get a problem's editable content
+ */
+
+export function useGetAdminProblem<
+  TData = Awaited<ReturnType<typeof getAdminProblem>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminProblem>>, TError, TData>>;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetAdminProblemQueryOptions(id, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * `409` if `revision` is not the current one. A request matching the current content changes
+ * nothing and keeps the revision.
+ * @summary Replace a problem's details, statement, visibility and samples
+ */
+export const updateAdminProblem = (
+  id: number,
+  updateProblemRequest: BodyType<UpdateProblemRequest>,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<AdminProblem>(
+    {
+      url: `/api/admin/problems/${id}`,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      data: updateProblemRequest,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getUpdateAdminProblemMutationKey = () => ['updateAdminProblem'] as const;
+
+export const getUpdateAdminProblemMutationOptions = <
+  TError = ErrorType<
+    | BadRequestResponse
+    | UnauthorizedResponse
+    | ForbiddenResponse
+    | NotFoundResponse
+    | ConflictResponse
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminProblem>>,
+    TError,
+    UpdateAdminProblemMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminProblem>>,
+  TError,
+  UpdateAdminProblemMutationVariables,
+  TContext
+> => {
+  const mutationKey = getUpdateAdminProblemMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminProblem>>,
+    UpdateAdminProblemMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateAdminProblem(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminProblemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminProblem>>
+>;
+export type UpdateAdminProblemMutationBody = BodyType<UpdateProblemRequest>;
+export type UpdateAdminProblemMutationError = ErrorType<
+  | BadRequestResponse
+  | UnauthorizedResponse
+  | ForbiddenResponse
+  | NotFoundResponse
+  | ConflictResponse
+>;
+export type UpdateAdminProblemMutationVariables = {
+  id: number;
+  data: BodyType<UpdateProblemRequest>;
+};
+
+/**
+ * @summary Replace a problem's details, statement, visibility and samples
+ */
+export const useUpdateAdminProblem = <
+  TError = ErrorType<
+    | BadRequestResponse
+    | UnauthorizedResponse
+    | ForbiddenResponse
+    | NotFoundResponse
+    | ConflictResponse
+  >,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateAdminProblem>>,
+      TError,
+      UpdateAdminProblemMutationVariables,
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminProblem>>,
+  TError,
+  UpdateAdminProblemMutationVariables,
+  TContext
+> => {
+  return useMutation(getUpdateAdminProblemMutationOptions(options), queryClient);
+};
+/**
+ * @summary List the tests of a problem's current test-data version
+ */
+export const listAdminProblemTests = (
+  id: number,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<AdminTestSet>(
+    { url: `/api/admin/problems/${id}/tests`, method: 'GET', signal },
+    options,
+  );
+};
+
+export const getListAdminProblemTestsQueryKey = (id: number) => {
+  return [`/api/admin/problems/${id}/tests`] as const;
+};
+
+export const getListAdminProblemTestsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminProblemTests>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAdminProblemTests>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminProblemTestsQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminProblemTests>>> = ({ signal }) =>
+    listAdminProblemTests(id, requestOptions, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof listAdminProblemTests>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type ListAdminProblemTestsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminProblemTests>>
+>;
+export type ListAdminProblemTestsQueryError = ErrorType<
+  UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+>;
+
+export function useListAdminProblemTests<
+  TData = Awaited<ReturnType<typeof listAdminProblemTests>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAdminProblemTests>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminProblemTests>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminProblemTests>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useListAdminProblemTests<
+  TData = Awaited<ReturnType<typeof listAdminProblemTests>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAdminProblemTests>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminProblemTests>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminProblemTests>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useListAdminProblemTests<
+  TData = Awaited<ReturnType<typeof listAdminProblemTests>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAdminProblemTests>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary List the tests of a problem's current test-data version
+ */
+
+export function useListAdminProblemTests<
+  TData = Awaited<ReturnType<typeof listAdminProblemTests>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listAdminProblemTests>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListAdminProblemTestsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * Tests are numbered 1..n in `manifest.tests` order. Each input and output is either kept from a
+ * test of `manifest.baseVersion` or uploaded as the `files` part at the given index; every file
+ * must be referenced exactly once. `409` if `baseVersion` is not the current version. If the
+ * result equals the current tests, nothing changes and `changed` is false.
+ * @summary Replace a problem's tests with a new ordered list
+ */
+export const saveAdminProblemTests = (
+  id: number,
+  saveTestsForm: BodyType<SaveTestsForm>,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  const formData = new FormData();
+  formData.append(`manifest`, JSON.stringify(saveTestsForm.manifest));
+  if (saveTestsForm.files !== undefined) {
+    saveTestsForm.files.forEach((value) => formData.append(`files`, value));
+  }
+
+  return customInstance<AdminTestSaveResult>(
+    {
+      url: `/api/admin/problems/${id}/tests`,
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/form-data' },
+      data: formData,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getSaveAdminProblemTestsMutationKey = () => ['saveAdminProblemTests'] as const;
+
+export const getSaveAdminProblemTestsMutationOptions = <
+  TError = ErrorType<
+    | BadRequestResponse
+    | UnauthorizedResponse
+    | ForbiddenResponse
+    | NotFoundResponse
+    | ConflictResponse
+    | PayloadTooLargeResponse
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveAdminProblemTests>>,
+    TError,
+    SaveAdminProblemTestsMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveAdminProblemTests>>,
+  TError,
+  SaveAdminProblemTestsMutationVariables,
+  TContext
+> => {
+  const mutationKey = getSaveAdminProblemTestsMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveAdminProblemTests>>,
+    SaveAdminProblemTestsMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return saveAdminProblemTests(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveAdminProblemTestsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveAdminProblemTests>>
+>;
+export type SaveAdminProblemTestsMutationBody = BodyType<SaveTestsForm>;
+export type SaveAdminProblemTestsMutationError = ErrorType<
+  | BadRequestResponse
+  | UnauthorizedResponse
+  | ForbiddenResponse
+  | NotFoundResponse
+  | ConflictResponse
+  | PayloadTooLargeResponse
+>;
+export type SaveAdminProblemTestsMutationVariables = { id: number; data: BodyType<SaveTestsForm> };
+
+/**
+ * @summary Replace a problem's tests with a new ordered list
+ */
+export const useSaveAdminProblemTests = <
+  TError = ErrorType<
+    | BadRequestResponse
+    | UnauthorizedResponse
+    | ForbiddenResponse
+    | NotFoundResponse
+    | ConflictResponse
+    | PayloadTooLargeResponse
+  >,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof saveAdminProblemTests>>,
+      TError,
+      SaveAdminProblemTestsMutationVariables,
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof saveAdminProblemTests>>,
+  TError,
+  SaveAdminProblemTestsMutationVariables,
+  TContext
+> => {
+  return useMutation(getSaveAdminProblemTestsMutationOptions(options), queryClient);
+};
+/**
+ * Supports a `Range` header (one byte range), answered with `206`.
+ * @summary Download a test's input from the current version
+ */
+export const downloadAdminProblemTestInput = (
+  id: number,
+  number: number,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<TestFileResponse | TestFilePartResponse>(
+    {
+      url: `/api/admin/problems/${id}/tests/${number}/input`,
+      method: 'GET',
+      responseType: 'blob',
+      signal,
+    },
+    options,
+  );
+};
+
+export const getDownloadAdminProblemTestInputQueryKey = (id: number, number: number) => {
+  return [`/api/admin/problems/${id}/tests/${number}/input`] as const;
+};
+
+export const getDownloadAdminProblemTestInputQueryOptions = <
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestInput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestInput>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getDownloadAdminProblemTestInputQueryKey(id, number);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadAdminProblemTestInput>>> = ({
+    signal,
+  }) => downloadAdminProblemTestInput(id, number, requestOptions, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined && number !== null && number !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestInput>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type DownloadAdminProblemTestInputQueryResult = NonNullable<
+  Awaited<ReturnType<typeof downloadAdminProblemTestInput>>
+>;
+export type DownloadAdminProblemTestInputQueryError = ErrorType<
+  UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+>;
+
+export function useDownloadAdminProblemTestInput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestInput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestInput>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadAdminProblemTestInput>>,
+          TError,
+          Awaited<ReturnType<typeof downloadAdminProblemTestInput>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useDownloadAdminProblemTestInput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestInput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestInput>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadAdminProblemTestInput>>,
+          TError,
+          Awaited<ReturnType<typeof downloadAdminProblemTestInput>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useDownloadAdminProblemTestInput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestInput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestInput>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Download a test's input from the current version
+ */
+
+export function useDownloadAdminProblemTestInput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestInput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestInput>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getDownloadAdminProblemTestInputQueryOptions(id, number, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * Supports a `Range` header (one byte range), answered with `206`.
+ * @summary Download a test's expected output from the current version
+ */
+export const downloadAdminProblemTestOutput = (
+  id: number,
+  number: number,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<TestFileResponse | TestFilePartResponse>(
+    {
+      url: `/api/admin/problems/${id}/tests/${number}/output`,
+      method: 'GET',
+      responseType: 'blob',
+      signal,
+    },
+    options,
+  );
+};
+
+export const getDownloadAdminProblemTestOutputQueryKey = (id: number, number: number) => {
+  return [`/api/admin/problems/${id}/tests/${number}/output`] as const;
+};
+
+export const getDownloadAdminProblemTestOutputQueryOptions = <
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getDownloadAdminProblemTestOutputQueryKey(id, number);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>> = ({
+    signal,
+  }) => downloadAdminProblemTestOutput(id, number, requestOptions, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined && number !== null && number !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type DownloadAdminProblemTestOutputQueryResult = NonNullable<
+  Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>
+>;
+export type DownloadAdminProblemTestOutputQueryError = ErrorType<
+  UnauthorizedResponse | ForbiddenResponse | NotFoundResponse
+>;
+
+export function useDownloadAdminProblemTestOutput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+          TError,
+          Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useDownloadAdminProblemTestOutput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+          TError,
+          Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>
+        >,
+        'initialData'
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useDownloadAdminProblemTestOutput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Download a test's expected output from the current version
+ */
+
+export function useDownloadAdminProblemTestOutput<
+  TData = Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>,
+  TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+>(
+  id: number,
+  number: number,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof downloadAdminProblemTestOutput>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getDownloadAdminProblemTestOutputQueryOptions(id, number, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;

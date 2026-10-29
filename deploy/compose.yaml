@@ -1,0 +1,118 @@
+# Production: everything on one server. Settings come from deploy/.env (see .env.example and README.md).
+name: wuoj
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wuoj
+      POSTGRES_USER: wuoj
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wuoj -d wuoj"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8.8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    # Sessions survive restarts, so nobody is signed out by a deploy.
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    # Without the management plugin: its UI isn't exposed here, and leaving it out saves memory.
+    image: rabbitmq:4.3-alpine
+    restart: unless-stopped
+    # RabbitMQ keeps its data under its node name, which includes the hostname: fixed, so it survives recreation.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: wuoj
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in deploy/.env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    image: wuoj/backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/wuoj
+      SPRING_DATASOURCE_USERNAME: wuoj
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: wuoj
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      # Trust X-Forwarded-For/-Proto from Caddy (a private Docker address), so per-address limits see the real
+      # client and session cookies are marked Secure under HTTPS.
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      OJ_JUDGE_IMAGE: wuoj/judge-cpp:prod
+      OJ_JUDGE_DOCKER_HOST: unix:///var/run/docker.sock
+      OJ_JUDGE_WORK_DIR: ${WUOJ_DATA}/judge
+      OJ_JUDGE_SLOTS: ${OJ_JUDGE_SLOTS:-}
+      OJ_JUDGE_RUNTIME: ${OJ_JUDGE_RUNTIME:-}
+      OJ_TESTDATA_ROOT: ${WUOJ_DATA}/testdata
+      OJ_REGISTRATION_ENABLED: ${OJ_REGISTRATION_ENABLED:-true}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=25
+    volumes:
+      # Judge containers are started by the host's Docker daemon, which resolves bind mounts on the host: the work
+      # and test-data directories must have the same paths inside this container as on the host.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${WUOJ_DATA:?set WUOJ_DATA in deploy/.env}/judge:${WUOJ_DATA}/judge
+      - ${WUOJ_DATA}/testdata:${WUOJ_DATA}/testdata
+    # Only reachable from the server itself, for `curl localhost:8080/actuator/health`.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    image: wuoj/web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+  caddy-data:
+  caddy-config:

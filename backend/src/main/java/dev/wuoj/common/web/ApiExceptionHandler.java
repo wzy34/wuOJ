@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /** Turns every error into an RFC 9457 problem; invalid input additionally lists the offending fields. */
@@ -32,6 +33,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     private static final String INVALID = "The request is invalid.";
+    static final String UPLOAD_TOO_LARGE = "The upload is too large: each test file can be at most 64 MB, and the "
+            + "files of one upload at most 520 MB together.";
 
     @ExceptionHandler(NotFoundException.class)
     ResponseEntity<ProblemDetail> notFound(NotFoundException ex) {
@@ -57,6 +60,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ResponseEntity<ProblemDetail> conflict(ConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ProblemResponses.problem(HttpStatus.CONFLICT, ex.getMessage()));
+    }
+
+    @ExceptionHandler(PayloadTooLargeException.class)
+    ResponseEntity<ProblemDetail> payloadTooLarge(PayloadTooLargeException ex) {
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(ProblemResponses.problem(HttpStatus.CONTENT_TOO_LARGE, ex.getMessage()));
     }
 
     @ExceptionHandler(ForbiddenException.class)
@@ -110,6 +119,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             WebRequest request) {
         return invalid(ex, List.of(new FieldErrorDto(ex.getParameterName(), "is required")), headers, status,
                 request);
+    }
+
+    /** Raised by the multipart parser, before any controller runs. */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ProblemDetail body = ProblemResponses.problem(HttpStatus.CONTENT_TOO_LARGE, UPLOAD_TOO_LARGE);
+        return handleExceptionInternal(ex, body, headers, status, request);
     }
 
     @Override

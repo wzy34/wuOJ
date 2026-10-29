@@ -21,10 +21,13 @@
  *   response to `GET /api/auth/me`, which clients call on startup before any state-changing request.
  * - **Errors**: RFC 9457 problem details (`application/problem+json`), see `ApiProblem`.
  * - **Paging**: `page` is 1-based (default 1), `size` defaults to 20 and is at most 100.
- * - **Hidden data**: inputs and expected outputs of non-sample tests are never returned. Submission
- *   source code and compiler output are returned only to the submission's owner and to admins.
+ * - **Hidden data**: inputs and expected outputs of non-sample tests are returned only by the problem
+ *   administration operations under `/api/admin`, to admins. Submission source code and compiler
+ *   output are returned only to the submission's owner and to admins.
+ * - **Concurrent edits**: problem updates carry the `revision`, and test saves the `baseVersion`, they
+ *   were based on; a stale one gets `409` and changes nothing.
  *
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import type { SubmissionStatus } from './submissionStatus';
 import type { Verdict } from './verdict';

@@ -8,6 +8,7 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.util.unit.DataSize;
 
 /** Everything configurable under {@code oj.*}. */
 @ConfigurationProperties("oj")
@@ -23,7 +24,19 @@ public record OjProperties(
         return roles.contains(role);
     }
 
-    public record TestData(@DefaultValue("./var/testdata") Path root) {}
+    /**
+     * @param maxVersionBytes the most that all tests of one test-data version may take together; uploads larger than
+     *     {@code spring.servlet.multipart.max-request-size} are refused before this is checked, so raise both together
+     */
+    public record TestData(
+            @DefaultValue("./var/testdata") Path root,
+            @DefaultValue("512MB") DataSize maxVersionBytes) {
+
+        /** Where uploaded test files wait while a save is checked; on the store's filesystem, so moves are cheap. */
+        public Path staging() {
+            return root.resolve(".staging");
+        }
+    }
 
     /**
      * @param slots one entry per concurrent judge: a Docker cpuset such as {@code "4"} or {@code "4-5"}, or an

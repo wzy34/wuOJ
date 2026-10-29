@@ -10,6 +10,8 @@ const PORT = 5181;
  */
 export default defineConfig({
   testDir: './e2e',
+  // Edits problems and tests; against the real backend that would change the development data for good.
+  testIgnore: ['admin-problems.spec.ts'],
   timeout: 60_000,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,

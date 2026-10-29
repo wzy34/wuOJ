@@ -15,6 +15,7 @@ import {
   type MockUser,
 } from '../db';
 import { judge, subscribe, toStatusEvent } from '../mockJudge';
+import { seesProblem } from './problems';
 import {
   checkCsrf,
   latency,
@@ -123,7 +124,9 @@ export const submissionHandlers = [
       return problemResponse(400, 'Bad Request', 'Invalid submission.', { errors });
     }
     const problem = problems.find((p) => p.id === body.problemId);
-    if (!problem) return problemResponse(404, 'Not Found', 'Problem not found.');
+    if (!problem || !seesProblem(user, problem)) {
+      return problemResponse(404, 'Not Found', 'Problem not found.');
+    }
 
     const now = Date.now();
     const wait = retryAfterSeconds(user.id, now);

@@ -5,6 +5,7 @@ import { RequireAdmin, RequireAuth } from '@/features/auth/RequireAuth';
 import { SessionGate } from '@/features/auth/SessionGate';
 import { SettingsPage } from '@/features/auth/SettingsPage';
 import { AdminAuditPage } from '@/features/admin/AdminAuditPage';
+import { AdminProblemsPage } from '@/features/admin/problems/AdminProblemsPage';
 import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
 import { ProblemListPage } from '@/features/problems/ProblemListPage';
 import { SubmissionDetailPage } from '@/features/submissions/SubmissionDetailPage';
@@ -57,6 +58,16 @@ export const routes: RouteObject[] = [
                     children: [
                       { path: '/admin', element: <Navigate to="/admin/users" replace /> },
                       { path: '/admin/users', Component: AdminUsersPage },
+                      { path: '/admin/problems', Component: AdminProblemsPage },
+                      {
+                        path: '/admin/problems/:id',
+                        // Monaco and KaTeX load with this chunk only, as for the workspace.
+                        lazy: async () => {
+                          const { ProblemEditorPage } =
+                            await import('@/features/admin/problems/ProblemEditorPage');
+                          return { Component: ProblemEditorPage };
+                        },
+                      },
                       { path: '/admin/audit', Component: AdminAuditPage },
                     ],
                   },

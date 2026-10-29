@@ -70,17 +70,22 @@ End to end with the web app: start the backend with the dev data and the simulat
 
 ## Importing content
 
-Problems and accounts are managed with files; there is no admin UI yet. Gradle runs the importers against the
-development database (`importDevData`); against any database, run the jar with the usual `spring.datasource.*`
-settings:
+Accounts and problems can be imported from files. Admins can also create and edit problems and their tests in the
+web app (`/admin/problems`). Gradle runs the importers against the development database (`importDevData`); against
+any database, run the jar with the usual `spring.datasource.*` settings:
 
 ```bash
 java -jar build/libs/wuoj-backend-0.1.0.jar import-users users.csv
 java -jar build/libs/wuoj-backend-0.1.0.jar import-problems problems/      # a package, or a directory of packages
+java -jar build/libs/wuoj-backend-0.1.0.jar import-problems --force problems/   # also overwrite web edits
 ```
 
 Both validate everything first and change nothing if anything is wrong, printing every problem found; the exit status
 is non-zero on failure.
+
+Re-importing a package updates the problem with the same slug. If an admin changed that problem in the web app since
+it was last imported, the package is rejected so the web edits aren't lost; `--force` imports it anyway. A package
+identical to the problem's current content is reported unchanged either way.
 
 ### Problem packages
 

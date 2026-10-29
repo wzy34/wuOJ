@@ -1,0 +1,13 @@
+.git
+.claude
+.agents
+**/node_modules
+backend/.gradle
+backend/build
+backend/var
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+deploy/.env
+dev-data
+openspec

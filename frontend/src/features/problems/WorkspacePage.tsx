@@ -10,10 +10,10 @@ import {
   Tooltip,
   Typography,
 } from '@arco-design/web-react';
-import { IconCheckCircleFill } from '@arco-design/web-react/icon';
+import { IconCheckCircleFill, IconEdit } from '@arco-design/web-react/icon';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import type { Problem } from '@/api/generated/model';
 import { useGetProblem } from '@/api/generated/problems/problems';
 import {
@@ -41,11 +41,19 @@ export const MAX_SOURCE_LENGTH = 65_536;
 
 function Statement({ problem }: { problem: Problem }) {
   const difficulty = DIFFICULTY_DISPLAY[problem.difficulty];
+  const { isAdmin } = useCurrentUser();
   return (
     <article>
-      <Typography.Title heading={4} className={styles.title}>
-        {problem.displayId}. {problem.title}
-      </Typography.Title>
+      <div className={styles.titleRow}>
+        <Typography.Title heading={4} className={styles.title}>
+          {problem.displayId}. {problem.title}
+        </Typography.Title>
+        {isAdmin && (
+          <Link to={`/admin/problems/${problem.id}`} className={styles.edit}>
+            <IconEdit /> Edit
+          </Link>
+        )}
+      </div>
       <Space wrap className={styles.meta}>
         <Tag color={difficulty.color}>{difficulty.label}</Tag>
         <Tag>Time limit: {formatTimeLimit(problem.timeLimitMs)}</Tag>

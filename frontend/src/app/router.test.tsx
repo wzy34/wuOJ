@@ -42,6 +42,12 @@ describe('routes', () => {
     expect(await screen.findByText('Page not found')).toBeInTheDocument();
   });
 
+  it('shows "page not found" for the problem editor to users who are not admins', async () => {
+    await signIn('alice');
+    renderRoute('/admin/problems/1');
+    expect(await screen.findByText('Page not found')).toBeInTheDocument();
+  });
+
   it('sends visitors to sign in for admin pages', async () => {
     const { router } = renderRoute('/admin/users');
     await screen.findByLabelText('Username');

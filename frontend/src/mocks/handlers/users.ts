@@ -7,7 +7,7 @@ import type {
   UserProfile,
   UserRole,
 } from '@/api/generated/model';
-import { db, users, type MockUser } from '../db';
+import { db, problems, users, type MockUser } from '../db';
 import {
   checkCsrf,
   latency,
@@ -183,12 +183,22 @@ export const userHandlers = [
       const user = users.find((u) => u.id === id)!;
       return { id: user.id, username: user.username };
     };
+    const problemRef = (id: number) => {
+      const problem = problems.find((p) => p.id === id)!;
+      return {
+        id: problem.id,
+        displayId: problem.displayId,
+        slug: problem.slug,
+        title: problem.title,
+      };
+    };
     const entries: AuditEntry[] = [...db.audit]
       .sort((a, b) => b.id - a.id)
-      .map(({ actorId, targetId, ...entry }) => ({
+      .map(({ actorId, targetId, problemId, ...entry }) => ({
         ...entry,
         actor: ref(actorId),
-        target: ref(targetId),
+        ...(targetId !== undefined && { target: ref(targetId) }),
+        ...(problemId !== undefined && { problem: problemRef(problemId) }),
       }));
     return HttpResponse.json(paginate(entries, paging.page, paging.size));
   }),

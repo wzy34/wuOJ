@@ -1,0 +1,22 @@
+# SITE_ADDRESS is a domain (HTTPS certificates are obtained and renewed automatically) or ":80" (plain HTTP).
+{$SITE_ADDRESS} {
+	handle /api/* {
+		# Flush at once: submission status is streamed with Server-Sent Events.
+		reverse_proxy backend:8080 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv/www
+		encode zstd gzip
+		# Vite's hashed bundles never change; everything else (index.html under any route) is revalidated.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@other not path /assets/*
+		header @other Cache-Control "no-cache"
+		# Client-side routes such as /problems/a-plus-b are all served the web app.
+		try_files {path} /index.html
+		file_server
+	}
+}

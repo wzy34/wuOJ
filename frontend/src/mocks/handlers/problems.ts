@@ -12,9 +12,25 @@ export function problemStatus(user: MockUser | undefined, problemId: number): Pr
   return mine.length > 0 ? 'ATTEMPTED' : 'NONE';
 }
 
+/** Hidden problems exist for admins only, as on the real server. */
+export function seesProblem(user: MockUser | undefined, problem: MockProblem): boolean {
+  return problem.visible || user?.role === 'ADMIN';
+}
+
 function toProblem(problem: MockProblem, user: MockUser | undefined): Problem {
-  const { testCount: _testCount, ...rest } = problem;
-  return { ...rest, status: problemStatus(user, problem.id) };
+  return {
+    id: problem.id,
+    displayId: problem.displayId,
+    slug: problem.slug,
+    title: problem.title,
+    difficulty: problem.difficulty,
+    status: problemStatus(user, problem.id),
+    timeLimitMs: problem.timeLimitMs,
+    memoryLimitMb: problem.memoryLimitMb,
+    statement: problem.statement,
+    samples: problem.samples,
+    languages: problem.languages,
+  };
 }
 
 export const problemHandlers = [
@@ -42,6 +58,7 @@ export const problemHandlers = [
     }
 
     const matches: ProblemSummary[] = problems
+      .filter((p) => seesProblem(user, p))
       .filter((p) => !q || p.title.toLowerCase().includes(q.toLowerCase()))
       .filter((p) => !difficulty || p.difficulty === difficulty)
       .map((p) => ({
@@ -61,7 +78,9 @@ export const problemHandlers = [
     if (user instanceof Response) return user;
 
     const problem = problems.find((p) => p.slug === params.slug);
-    if (!problem) return problemResponse(404, 'Not Found', 'Problem not found.');
+    if (!problem || !seesProblem(user, problem)) {
+      return problemResponse(404, 'Not Found', 'Problem not found.');
+    }
     return HttpResponse.json(toProblem(problem, user));
   }),
 ];

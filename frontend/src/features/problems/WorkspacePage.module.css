@@ -95,3 +95,15 @@
 .stackedEditor {
   height: 75vh;
 }
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.edit {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

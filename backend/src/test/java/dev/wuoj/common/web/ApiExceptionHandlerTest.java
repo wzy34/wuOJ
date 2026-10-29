@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * Each error mapping produces an RFC 9457 body that matches the contract's {@code ApiProblem}, checked against an
@@ -116,6 +117,22 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void oversizedUploadsNameTheLimit() throws Exception {
+        MvcResult result = mvc.perform(get("/t/too-many-tests"))
+                .andExpect(status().isContentTooLarge())
+                .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("A problem can have at most 1000 tests."))
+                .andReturn();
+        Contract.assertResponseConformsAs(result, Method.POST, "/api/admin/problems/1/tests");
+
+        result = mvc.perform(get("/t/multipart-limit"))
+                .andExpect(status().isContentTooLarge())
+                .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.UPLOAD_TOO_LARGE))
+                .andReturn();
+        Contract.assertResponseConformsAs(result, Method.POST, "/api/admin/problems");
+    }
+
+    @Test
     void unexpectedErrorIsAProblemWithoutDetails() throws Exception {
         mvc.perform(get("/t/boom"))
                 .andExpect(status().isInternalServerError())
@@ -150,6 +167,16 @@ class ApiExceptionHandlerTest {
         @GetMapping("/limited")
         String limited() {
             throw new RateLimitedException(7, "Too many submissions. Try again in 7 seconds.");
+        }
+
+        @GetMapping("/too-many-tests")
+        String tooManyTests() {
+            throw new PayloadTooLargeException("A problem can have at most 1000 tests.");
+        }
+
+        @GetMapping("/multipart-limit")
+        String multipartLimit() {
+            throw new MaxUploadSizeExceededException(64L * 1024 * 1024);
         }
 
         @GetMapping("/boom")

@@ -61,8 +61,8 @@ public class JudgeRepository {
         jdbc.sql("DELETE FROM submission_test_results WHERE submission_id = :id").param("id", submissionId).update();
         return jdbc.sql("""
                         SELECT s.id, s.attempts, s.event_seq, s.user_id, s.problem_id, s.source_code,
-                               s.testdata_version, p.time_limit_ms, p.memory_limit_mb
-                          FROM submissions s JOIN problems p ON p.id = s.problem_id
+                               s.testdata_version, s.time_limit_ms, s.memory_limit_mb
+                          FROM submissions s
                          WHERE s.id = :id""")
                 .param("id", submissionId)
                 .query((rs, n) -> new Claim(rs.getLong("id"), rs.getInt("attempts"), rs.getLong("event_seq"),

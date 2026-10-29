@@ -1,5 +1,5 @@
 import type { AuditAction, SubmissionDetail, UserRole } from '@/api/generated/model';
-import { problemFixtures, type MockProblem } from './fixtures/problems';
+import { seedProblems, type MockProblem } from './fixtures/problems';
 
 export type MockUser = {
   id: number;
@@ -14,14 +14,18 @@ export type MockUser = {
   lastLoginAt?: string;
 };
 
+/** Exactly one of `targetId` (an account) and `problemId` is set. */
 export type MockAuditEntry = {
   id: number;
   createdAt: string;
   actorId: number;
-  targetId: number;
+  targetId?: number;
+  problemId?: number;
   action: AuditAction;
   fromRole?: UserRole;
   toRole?: UserRole;
+  fromTestCount?: number;
+  toTestCount?: number;
 };
 
 /** A stored submission always carries source code; owner-only fields are stripped per request. */
@@ -75,7 +79,8 @@ function seedUsers(): MockUser[] {
 /** Accounts live in memory only: registrations and admin changes last for the page session. */
 export const users: MockUser[] = seedUsers();
 
-export const problems: MockProblem[] = problemFixtures;
+/** Problems and their tests live in memory only: admin edits last for the page session. */
+export const problems: MockProblem[] = seedProblems();
 
 const SESSION_KEY = 'wuoj-mock-session';
 const DB_KEY = 'wuoj-mock-db-v1';
@@ -275,6 +280,8 @@ export function setSessionUser(user: MockUser | null): void {
 export function resetDb(): void {
   writeStorage(DB_KEY, null);
   writeStorage(SESSION_KEY, null);
+  // Seeded submissions refer to the seeded problems.
+  problems.splice(0, problems.length, ...seedProblems());
   db.submissions = seedSubmissions();
   db.nextSubmissionId = 7;
   users.splice(0, users.length, ...seedUsers());

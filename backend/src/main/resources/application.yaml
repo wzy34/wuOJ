@@ -7,6 +7,12 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  servlet:
+    multipart:
+      # Test uploads from the admin problem editor.
+      max-file-size: 64MB
+      # One whole test set: oj.testdata.max-version-bytes plus room for the JSON parts. Raise both together.
+      max-request-size: 520MB
   jackson:
     default-property-inclusion: non_null
   session:
@@ -30,6 +36,11 @@ spring:
 server:
   port: 8080
   shutdown: graceful
+  tomcat:
+    # Saving tests sends up to two files for each of at most 1,000 tests, plus the JSON parts.
+    max-part-count: 2010
+    # The JSON parts of a multipart upload (statement, samples, manifest) count against this.
+    max-http-form-post-size: 8MB
   servlet:
     session:
       cookie:
@@ -49,6 +60,7 @@ oj:
   roles: [api, worker]
   testdata:
     root: ./var/testdata
+    max-version-bytes: 512MB
   judge:
     image: wuoj/judge-cpp:dev
     work-dir: ./var/judge

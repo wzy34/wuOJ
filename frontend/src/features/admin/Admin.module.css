@@ -25,6 +25,11 @@
   width: 160px;
 }
 
+/* Pushes the item to the end of the filter row. */
+.push {
+  margin-left: auto;
+}
+
 .password {
   display: flex;
   align-items: center;

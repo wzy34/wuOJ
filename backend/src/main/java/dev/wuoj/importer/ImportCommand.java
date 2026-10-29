@@ -12,8 +12,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Runs {@code import-problems <dir>} or {@code import-users <csv>} when the application is started as a command (see
- * {@code WuojApplication}), then lets the process exit with the command's status.
+ * Runs {@code import-problems [--force] <dir>} or {@code import-users <csv>} when the application is started as a
+ * command (see {@code WuojApplication}), then lets the process exit with the command's status. {@code --force}
+ * overwrites problems that were edited in the web app since their last import.
  */
 @Component
 @ConditionalOnProperty("oj.command")
@@ -35,16 +36,19 @@ public class ImportCommand implements ApplicationRunner, ExitCodeGenerator {
     public void run(ApplicationArguments args) throws Exception {
         List<String> positional = args.getNonOptionArgs();
         if (positional.size() != 2 || !COMMANDS.contains(positional.get(0))) {
-            out.println("Usage: import-problems <package or directory of packages> | import-users <users.csv>");
+            out.println("Usage: import-problems [--force] <package or directory of packages>"
+                    + " | import-users <users.csv>");
             exitCode = 2;
             return;
         }
         Path path = Path.of(positional.get(1)).toAbsolutePath().normalize();
-        exitCode = positional.get(0).equals("import-problems") ? importProblems(path) : importUsers(path);
+        exitCode = positional.get(0).equals("import-problems")
+                ? importProblems(path, args.containsOption("force"))
+                : importUsers(path);
     }
 
-    private int importProblems(Path path) throws Exception {
-        List<ProblemImporter.Report> reports = problemImporter.importPath(path);
+    private int importProblems(Path path, boolean force) throws Exception {
+        List<ProblemImporter.Report> reports = problemImporter.importPath(path, force);
         int rejected = 0;
         for (ProblemImporter.Report report : reports) {
             out.printf("%-10s %s%n", report.outcome(), report.name());

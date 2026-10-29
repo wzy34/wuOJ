@@ -14,15 +14,20 @@ type Props = {
   onSubmitShortcut?: (source: string) => void;
   readOnly?: boolean;
   height?: string | number;
+  /** C++ unless given; problem statements use `markdown`. */
+  language?: 'cpp' | 'markdown';
+  ariaLabel?: string;
 };
 
-/** Monaco configured for C++, following the app theme and the saved font size. */
+/** Monaco, for C++ by default, following the app theme and the saved font size. */
 export function CodeEditor({
   value,
   onChange,
   onSubmitShortcut,
   readOnly = false,
   height = '100%',
+  language = 'cpp',
+  ariaLabel,
 }: Props) {
   const theme = useEffectiveTheme();
   const fontSize = usePreferences((state) => state.editorFontSize);
@@ -40,7 +45,7 @@ export function CodeEditor({
   return (
     <Editor
       height={height}
-      language="cpp"
+      language={language}
       theme={theme === 'dark' ? 'vs-dark' : 'light'}
       value={value}
       onChange={(next) => onChange?.(next ?? '')}
@@ -55,7 +60,8 @@ export function CodeEditor({
         automaticLayout: true,
         renderLineHighlight: readOnly ? 'none' : 'line',
         domReadOnly: readOnly,
-        ariaLabel: readOnly ? 'Source code' : 'Code editor',
+        ariaLabel: ariaLabel ?? (readOnly ? 'Source code' : 'Code editor'),
+        wordWrap: language === 'markdown' ? 'on' : 'off',
       }}
     />
   );

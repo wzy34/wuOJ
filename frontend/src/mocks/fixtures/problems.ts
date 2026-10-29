@@ -1,10 +1,23 @@
 import type { Difficulty, Problem } from '@/api/generated/model';
 
-/** A problem as stored by the mock backend: the API shape plus how many hidden tests it has. */
-export type MockProblem = Omit<Problem, 'status'> & { testCount: number };
+/** One hidden test, byte for byte. */
+export type MockTest = { input: Uint8Array; output: Uint8Array };
+
+/**
+ * A problem as stored by the mock backend: the API shape plus its visibility, edit bookkeeping and
+ * hidden tests. `testCount` always equals `tests.length`.
+ */
+export type MockProblem = Omit<Problem, 'status'> & {
+  testCount: number;
+  visible: boolean;
+  revision: number;
+  updatedAt: string;
+  testdataVersion: string;
+  tests: MockTest[];
+};
 
 type Draft = Pick<MockProblem, 'slug' | 'title' | 'difficulty' | 'statement' | 'samples'> &
-  Partial<Pick<MockProblem, 'timeLimitMs' | 'memoryLimitMb' | 'testCount'>>;
+  Partial<Pick<MockProblem, 'timeLimitMs' | 'memoryLimitMb' | 'testCount' | 'visible'>>;
 
 const featured: Draft[] = [
   {
@@ -162,12 +175,70 @@ const warmUps: Draft[] = Array.from({ length: 39 }, (_, index) => {
   };
 });
 
-export const problemFixtures: MockProblem[] = [...featured, ...warmUps].map((draft, index) => ({
-  id: index + 1,
-  displayId: String(1001 + index),
-  timeLimitMs: 1000,
-  memoryLimitMb: 256,
-  testCount: 10,
-  languages: ['CPP17'],
-  ...draft,
-}));
+/** Not published yet: only admins see it. */
+const hidden: Draft[] = [
+  {
+    slug: 'shortest-path-draft',
+    title: 'Shortest Path (draft)',
+    difficulty: 'HARD',
+    testCount: 3,
+    visible: false,
+    statement: `Find the length of the shortest path from vertex $1$ to vertex $n$ in a weighted graph.
+
+## Input
+
+The first line contains $n$ and $m$ ($2 \\le n \\le 10^5$, $1 \\le m \\le 2 \\cdot 10^5$).`,
+    samples: [{ input: '2 1\n1 2 5\n', output: '5\n' }],
+  },
+];
+
+const encoder = new TextEncoder();
+
+/** Seeded tests are generated text: test `n` reads `n` and expects a line naming the problem. */
+function seedTests(slug: string, count: number): MockTest[] {
+  return Array.from({ length: count }, (_, i) => ({
+    input: encoder.encode(`${i + 1}\n`),
+    output: encoder.encode(`${slug} ${i + 1}\n`),
+  }));
+}
+
+/** A version name derived from the tests' contents (FNV-1a), so identical tests give the same one. */
+export function testdataVersion(tests: MockTest[]): string {
+  let hash = 0x811c9dc5;
+  const mix = (byte: number) => {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  };
+  for (const test of tests) {
+    for (const part of [test.input, test.output]) {
+      part.forEach(mix);
+      mix(0xff);
+    }
+  }
+  return `v${tests.length}x${hash.toString(16)}`;
+}
+
+/** Fresh copies, so edits made in the mock never leak into the next test or reload. */
+export function seedProblems(): MockProblem[] {
+  return [...featured, ...warmUps, ...hidden].map((draft, index) => {
+    const tests = seedTests(draft.slug, draft.testCount ?? 10);
+    return {
+      id: index + 1,
+      displayId: String(1001 + index),
+      timeLimitMs: 1000,
+      memoryLimitMb: 256,
+      languages: ['CPP17'],
+      visible: true,
+      ...draft,
+      samples: draft.samples.map((s) => ({ ...s })),
+      testCount: tests.length,
+      tests,
+      testdataVersion: testdataVersion(tests),
+      revision: 1,
+      updatedAt: new Date(Date.UTC(2026, 9, 1)).toISOString(),
+    };
+  });
+}
+
+/** The seeded problems, for tests that need to know what the mock starts with. */
+export const problemFixtures: MockProblem[] = seedProblems();

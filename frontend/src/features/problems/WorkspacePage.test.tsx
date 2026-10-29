@@ -29,6 +29,29 @@ function countSubmissionPosts() {
   return posts;
 }
 
+describe('admin edit link', () => {
+  it('links admins to the problem editor', async () => {
+    await signIn('admin');
+    renderRoute('/problems/a-plus-b');
+    expect(await screen.findByRole('link', { name: 'Edit' })).toHaveAttribute(
+      'href',
+      '/admin/problems/1',
+    );
+  });
+
+  it('is not shown to users or visitors', async () => {
+    const visitor = renderRoute('/problems/a-plus-b');
+    await screen.findByRole('heading', { name: '1001. A + B' });
+    expect(screen.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
+    visitor.unmount();
+
+    await signIn('student');
+    renderRoute('/problems/a-plus-b');
+    await screen.findByRole('heading', { name: '1001. A + B' });
+    expect(screen.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+});
+
 describe('workspace layout', () => {
   it('shows the statement with limits, samples and the editor with the template', async () => {
     await signIn();

@@ -15,6 +15,7 @@ import java.util.List;
 import dev.wuoj.common.config.OjProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.util.unit.DataSize;
 
 class FileSystemTestDataStoreTest {
 
@@ -22,7 +23,7 @@ class FileSystemTestDataStoreTest {
     Path temp;
 
     private FileSystemTestDataStore store(Path root) {
-        return new FileSystemTestDataStore(new OjProperties(List.of(), new OjProperties.TestData(root),
+        return new FileSystemTestDataStore(new OjProperties(List.of(), new OjProperties.TestData(root, DataSize.ofMegabytes(512)),
                 new OjProperties.Judge("i", null, null, List.of(), temp, false, Duration.ZERO),
                 new OjProperties.RateLimit(3, Duration.ofSeconds(10), 2, Duration.ofSeconds(5), 30,
                         Duration.ofMinutes(1)),

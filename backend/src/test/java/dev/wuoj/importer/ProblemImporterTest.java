@@ -135,6 +135,58 @@ class ProblemImporterTest extends IntegrationTest {
         assertThat(problems.findStoredBySlug("b")).isEmpty();
     }
 
+    private void editOnWeb(String slug) {
+        fixtures.jdbc().sql("UPDATE problems SET title = 'Fixed on the web', last_edit_source = 'WEB' WHERE slug = :s")
+                .param("s", slug).update();
+    }
+
+    @Test
+    void webEditsAreNotOverwrittenWithoutForce() throws Exception {
+        PackageWriter pkg = PackageWriter.valid(temp.resolve("p"), "1001", "p", 3);
+        importer.importPackage(pkg.dir());
+        editOnWeb("p");
+
+        var report = importer.importPackage(pkg.dir());
+
+        assertThat(report.outcome()).isEqualTo(Outcome.REJECTED);
+        assertThat(report.errors()).singleElement().asString().contains("edited in the web app").contains("--force");
+        assertThat(problems.findStoredBySlug("p").orElseThrow().data().title()).isEqualTo("Fixed on the web");
+    }
+
+    @Test
+    void forcedImportOverwritesWebEdits() throws Exception {
+        PackageWriter pkg = PackageWriter.valid(temp.resolve("p"), "1001", "p", 3);
+        importer.importPackage(pkg.dir());
+        editOnWeb("p");
+
+        assertThat(importer.importPackage(pkg.dir(), true).outcome()).isEqualTo(Outcome.UPDATED);
+        var after = problems.findStoredBySlug("p").orElseThrow();
+        assertThat(after.data().title()).isEqualTo("Title of p");
+        assertThat(after.lastEditSource()).isEqualTo(ProblemRepository.EditSource.IMPORT);
+        assertThat(importer.importPackage(pkg.dir()).outcome()).isEqualTo(Outcome.UNCHANGED);
+    }
+
+    @Test
+    void packageMatchingTheWebEditsIsUnchanged() throws Exception {
+        PackageWriter pkg = PackageWriter.valid(temp.resolve("p"), "1001", "p", 3);
+        importer.importPackage(pkg.dir());
+        fixtures.jdbc().sql("UPDATE problems SET last_edit_source = 'WEB'").update();
+
+        assertThat(importer.importPackage(pkg.dir()).outcome()).isEqualTo(Outcome.UNCHANGED);
+    }
+
+    @Test
+    void importedChangesIncreaseTheRevision() throws Exception {
+        PackageWriter pkg = PackageWriter.valid(temp.resolve("p"), "1001", "p", 3);
+        importer.importPackage(pkg.dir());
+        assertThat(problems.findStoredBySlug("p").orElseThrow().revision()).isEqualTo(1);
+
+        importer.importPackage(pkg.file("statement.md", "New\n").dir());
+        assertThat(problems.findStoredBySlug("p").orElseThrow().revision()).isEqualTo(2);
+        importer.importPackage(pkg.file("tests/1.out", "9\n").dir());
+        assertThat(problems.findStoredBySlug("p").orElseThrow().revision()).as("tests only").isEqualTo(2);
+    }
+
     @Test
     void rejectedPackageChangesNothing() throws Exception {
         PackageWriter pkg = PackageWriter.valid(temp.resolve("p"), "1001", "p", 3).delete("tests/3.out");
